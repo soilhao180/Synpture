@@ -1546,6 +1546,81 @@ textarea {
   line-height: 1.7;
 }
 
+.runtime-resource-list {
+  display: grid;
+  gap: var(--space-14);
+  margin-top: var(--space-12);
+}
+
+.runtime-resource-item {
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-14);
+  border: 1px solid rgba(36, 68, 93, 0.82);
+  border-radius: var(--radius-16);
+  background: rgba(18, 49, 73, 0.86);
+}
+
+.runtime-resource-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: 42px;
+}
+
+.runtime-resource-head strong {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.runtime-resource-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(54, 83, 106, 0.78);
+  border-radius: var(--radius-pill);
+  background: rgba(16, 36, 60, 0.92);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.runtime-resource-state.is-ready {
+  border-color: rgba(97, 241, 221, 0.96);
+  background: linear-gradient(180deg, rgba(79, 217, 201, 1), rgba(68, 224, 199, 0.94));
+  color: #09243a;
+}
+
+.runtime-resource-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.runtime-resource-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+}
+
+.runtime-resource-actions .drawer-chip {
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+}
+
 .history-list {
   display: flex;
   flex-direction: column;
@@ -5198,6 +5273,19 @@ html[data-theme="light"] .right-drawer .drawer-card {
   padding-inline: 12px;
 }
 
+.right-drawer .runtime-resource-list {
+  gap: var(--space-14);
+}
+
+.right-drawer .runtime-resource-item {
+  padding: var(--space-14);
+}
+
+.right-drawer .runtime-resource-actions .drawer-chip {
+  width: 100%;
+  min-height: 40px;
+}
+
 .right-drawer .theme-toggle {
   gap: var(--space-8);
 }
@@ -5456,6 +5544,7 @@ html[data-theme="light"] .template-task-inline {
 html[data-theme="light"] .right-drawer .drawer-card,
 html[data-theme="light"] .right-drawer .settings-theme-block,
 html[data-theme="light"] .right-drawer .health-item,
+html[data-theme="light"] .right-drawer .runtime-resource-item,
 html[data-theme="light"] .right-drawer .share-link-browser-note {
   background: #ffffff !important;
   border-color: rgba(188, 207, 201, 0.82) !important;
@@ -5464,12 +5553,14 @@ html[data-theme="light"] .right-drawer .share-link-browser-note {
 html[data-theme="light"] .right-drawer .drawer-card h3,
 html[data-theme="light"] .right-drawer .drawer-card strong,
 html[data-theme="light"] .right-drawer .health-item strong,
+html[data-theme="light"] .right-drawer .runtime-resource-head strong,
 html[data-theme="light"] .right-drawer .settings-theme-head strong {
   color: #12314a !important;
 }
 
 html[data-theme="light"] .right-drawer .drawer-card p,
 html[data-theme="light"] .right-drawer .health-item p,
+html[data-theme="light"] .right-drawer .runtime-resource-copy,
 html[data-theme="light"] .right-drawer .share-link-browser-note p {
   color: #45606b !important;
   overflow-wrap: anywhere;
@@ -5478,6 +5569,7 @@ html[data-theme="light"] .right-drawer .share-link-browser-note p {
 html[data-theme="light"] .right-drawer .drawer-head,
 html[data-theme="light"] .right-drawer .drawer-card-head,
 html[data-theme="light"] .right-drawer .health-item-head,
+html[data-theme="light"] .right-drawer .runtime-resource-head,
 html[data-theme="light"] .right-drawer .settings-theme-head {
   align-items: center;
   gap: var(--space-8);
@@ -5485,7 +5577,8 @@ html[data-theme="light"] .right-drawer .settings-theme-head {
 
 html[data-theme="light"] .right-drawer .button-row,
 html[data-theme="light"] .right-drawer .drawer-tool-row,
-html[data-theme="light"] .right-drawer .drawer-actions {
+html[data-theme="light"] .right-drawer .drawer-actions,
+html[data-theme="light"] .right-drawer .runtime-resource-actions {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-8);
@@ -5496,9 +5589,10 @@ html[data-theme="light"] .right-drawer .button-row .drawer-chip,
 html[data-theme="light"] .right-drawer .drawer-tool-row .drawer-primary,
 html[data-theme="light"] .right-drawer .drawer-tool-row .drawer-chip,
 html[data-theme="light"] .right-drawer .drawer-actions .drawer-primary,
-html[data-theme="light"] .right-drawer .drawer-actions .drawer-chip {
+html[data-theme="light"] .right-drawer .drawer-actions .drawer-chip,
+html[data-theme="light"] .right-drawer .runtime-resource-actions .drawer-chip {
   width: 100%;
-  min-height: 38px;
+  min-height: 40px;
 }
 
 html[data-theme="light"] .toast-card,
@@ -5585,20 +5679,35 @@ html[data-theme="light"] .right-drawer .settings-theme-block {
 
 html[data-theme="light"] .right-drawer .drawer-card,
 html[data-theme="light"] .right-drawer .settings-theme-block,
-html[data-theme="light"] .right-drawer .health-item {
+html[data-theme="light"] .right-drawer .health-item,
+html[data-theme="light"] .right-drawer .runtime-resource-item {
   padding: var(--space-12) !important;
 }
 
 html[data-theme="light"] .right-drawer .settings-theme-head strong,
 html[data-theme="light"] .right-drawer .drawer-card-head h3,
-html[data-theme="light"] .right-drawer .health-item strong {
+html[data-theme="light"] .right-drawer .health-item strong,
+html[data-theme="light"] .right-drawer .runtime-resource-head strong {
   font-size: 13px;
   line-height: 1.35;
 }
 
 html[data-theme="light"] .right-drawer .settings-theme-head span,
 html[data-theme="light"] .right-drawer .drawer-card-head span,
-html[data-theme="light"] .right-drawer .health-item p {
+html[data-theme="light"] .right-drawer .health-item p,
+html[data-theme="light"] .right-drawer .runtime-resource-copy {
   font-size: 12px;
   line-height: 1.55;
+}
+
+html[data-theme="light"] .runtime-resource-state {
+  background: #f6faf8 !important;
+  border-color: rgba(160, 178, 174, 0.72) !important;
+  color: #45606b !important;
+}
+
+html[data-theme="light"] .runtime-resource-state.is-ready {
+  background: #44e0c7 !important;
+  border-color: #44e0c7 !important;
+  color: #12314a !important;
 }

@@ -393,9 +393,9 @@ function buildStoredProgressTimeline(progress, source = {}) {
 function loadThemePreference() {
   try {
     const stored = window.localStorage?.getItem(THEME_STORAGE_KEY);
-    return THEME_OPTIONS.some((item) => item.id === stored) ? stored : "system";
+    return THEME_OPTIONS.some((item) => item.id === stored) ? stored : "dark";
   } catch {
-    return "system";
+    return "dark";
   }
 }
 
@@ -557,6 +557,7 @@ function renderApp() {
     <div class="app-shell ${state.workspaceIntro ? "is-entering" : ""}">
       ${renderTopNav()}
       ${renderGlobalFeedback()}
+      <input id="runtime-resource-file-input" class="hidden-file-input" type="file" />
       <div class="workspace-stage ${state.selectedHistoryRunId ? "is-history-focus" : ""}">
         <div class="workspace-rail workspace-rail--left ${state.leftDrawerOpen ? "is-open" : "is-closed"}">
           ${state.leftDrawerOpen ? renderProjectDrawer() : ""}
@@ -950,7 +951,6 @@ function renderResourcePrompt() {
           <button class="drawer-chip" data-action="retry-runtime-resource" data-resource-id="${escapeAttribute(resource.id)}" ${busy ? "disabled" : ""}>重试检查</button>
           <button class="drawer-chip" data-action="dismiss-resource-prompt" ${busy ? "disabled" : ""}>取消</button>
         </div>
-        <input id="runtime-resource-file-input" class="hidden-file-input" type="file" />
       </section>
     </div>
   `;
@@ -1322,15 +1322,15 @@ function renderRuntimeResourcesCard() {
       <div class="drawer-card-head">
         <h3>运行资源</h3>
       </div>
-      <div class="health-list">
+      <div class="runtime-resource-list">
         ${resources.map((item) => `
-          <div class="health-item">
-            <div class="health-item-head">
+          <div class="runtime-resource-item">
+            <div class="runtime-resource-head">
               <strong>${escapeHtml(item.title ?? item.id)}</strong>
-              <span class="drawer-pill ${item.ready ? "is-accent" : ""}">${escapeHtml(item.ready ? "可用" : item.state ?? "缺失")}</span>
+              <span class="runtime-resource-state ${item.ready ? "is-ready" : ""}">${escapeHtml(item.ready ? "可用" : item.state ?? "缺失")}</span>
             </div>
-            <p>${escapeHtml(item.detail ?? item.description ?? "")}</p>
-            <div class="button-row">
+            <p class="runtime-resource-copy">${escapeHtml(item.detail ?? item.description ?? "")}</p>
+            <div class="runtime-resource-actions">
               <button class="drawer-chip" data-action="download-runtime-resource" data-resource-id="${escapeAttribute(item.id)}" ${item.ready || !item.urlConfigured || !item.sha256Configured || state.resourceBusyId === item.id ? "disabled" : ""}>${state.resourceBusyId === item.id ? "处理中..." : "下载"}</button>
               <button class="drawer-chip" data-action="select-runtime-resource-file" data-resource-id="${escapeAttribute(item.id)}" ${state.resourceBusyId === item.id ? "disabled" : ""}>选择本地文件</button>
               <button class="drawer-chip" data-action="retry-runtime-resource" data-resource-id="${escapeAttribute(item.id)}" ${state.resourceBusyId === item.id ? "disabled" : ""}>刷新</button>
