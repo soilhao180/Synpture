@@ -67,13 +67,76 @@ The model is intentionally not committed to Git. Put it in `models/`, or pass a 
 
 From a clean clone:
 
+1. Install the required base tools:
+
+   - Git for Windows
+   - Python 3.11+
+   - Visual Studio Build Tools with C++ workload, CMake, and Ninja
+   - NVIDIA CUDA Toolkit if GPU transcription is required
+   - PowerShell, included with Windows
+
+2. Clone the repository:
+
+   ```powershell
+   git clone git@github.com:soilhao180/Synpture.git
+   cd Synpture
+   ```
+
+3. Bootstrap the local development environment:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/bootstrap_dev.ps1 -UseVenv
+   ```
+
+   This creates `.venv`, installs Python dependencies, creates `.env` from `.env.example` when missing, restores `third_party/`, downloads Node/Chromium/FFmpeg, installs Playwright, restores `whisper.cpp`, and prepares the local transcription runtime.
+
+4. Add the transcription model manually:
+
+   ```text
+   models/ggml-large-v3-turbo-q5_0.bin
+   ```
+
+   The model is intentionally not stored in Git. If you have a direct model download URL, you can run:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/restore_runtime.ps1 -ModelUrl "https://example.com/ggml-large-v3-turbo-q5_0.bin"
+   ```
+
+5. Start the app:
+
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   python app.py
+   ```
+
+6. Open the workspace:
+
+   ```text
+   http://127.0.0.1:8000
+   ```
+
+7. In system settings, fill and save:
+
+   - API base URL
+   - API key
+   - model name
+
+   These settings are written to the local `.env` file and must not be committed.
+
+Short version:
+
 ```powershell
+git clone git@github.com:soilhao180/Synpture.git
+cd Synpture
 powershell -ExecutionPolicy Bypass -File scripts/bootstrap_dev.ps1
+python app.py
 ```
 
-Then start:
+With local virtual environment:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap_dev.ps1 -UseVenv
+.\.venv\Scripts\Activate.ps1
 python app.py
 ```
 
