@@ -16,7 +16,9 @@ from src.runtime_paths import (
     get_user_data_root,
     get_windows_debug_crt_dependencies,
     is_packaged,
+    runtime_resource_path,
 )
+from src.runtime_resources import serialize_runtime_resources
 from src.transcription_runtime import probe_transcription_capability
 from src.utils import ensure_directory, hidden_subprocess_kwargs
 
@@ -39,6 +41,7 @@ def run_startup_checks(settings: Settings) -> list[DiagnosticItem]:
         check_whisper_cpp_portability(settings),
         check_model_file(settings.whisper_cpp_model_path),
         check_packaged_runtime_paths(settings),
+        check_runtime_resources(),
         check_browser_runtime(),
         check_python_package("openai", "openai"),
         check_python_package("python-dotenv", "dotenv", optional=True),
@@ -101,6 +104,7 @@ def check_browser_runtime() -> DiagnosticItem:
     node_bin = os.getenv("SHARE_LINK_NODE_BIN")
     node_candidates = [
         Path(node_bin) if node_bin else None,
+        runtime_resource_path("third_party", "browser_runtime", "node", "node.exe"),
         bundled_path("third_party", "node", "node.exe"),
         shutil.which("node"),
     ]
@@ -109,6 +113,7 @@ def check_browser_runtime() -> DiagnosticItem:
     node_path = os.getenv("SHARE_LINK_NODE_PATH")
     node_modules_candidates = [
         Path(node_path) if node_path else None,
+        runtime_resource_path("third_party", "browser_runtime", "node_runtime", "node_modules"),
         bundled_path("third_party", "node_runtime", "node_modules"),
         bundled_path("third_party", "node", "node_modules"),
     ]
@@ -117,6 +122,7 @@ def check_browser_runtime() -> DiagnosticItem:
     chrome_env = os.getenv("SHARE_LINK_CHROME_EXE")
     chrome_candidates = [
         Path(chrome_env) if chrome_env else None,
+        runtime_resource_path("third_party", "browser_runtime", "chromium", "chrome.exe"),
         bundled_path("third_party", "chromium", "chrome.exe"),
         Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
     ]
@@ -138,6 +144,20 @@ def check_browser_runtime() -> DiagnosticItem:
         f"分享链接授权/探针可能不可用，缺少：{', '.join(missing)}。",
         "安装包应内置 third_party/node 与 third_party/chromium，或在 .env 中配置 SHARE_LINK_NODE_BIN/SHARE_LINK_NODE_PATH/SHARE_LINK_CHROME_EXE。",
     )
+
+
+def check_runtime_resources() -> DiagnosticItem:
+    resources = serialize_runtime_resources()
+    if not resources:
+        return DiagnosticItem("运行资源", "warn", "未找到运行资源 manifest。", "请检查 packaging/runtime_resources.json。")
+
+    invalid = [item["title"] for item in resources if item.get("state") == "invalid"]
+    missing = [item["title"] for item in resources if not item.get("ready")]
+    if invalid:
+        return DiagnosticItem("运行资源", "error", f"资源校验失败：{', '.join(invalid)}。", "请重新下载对应运行资源。")
+    if missing:
+        return DiagnosticItem("运行资源", "warn", f"缺少运行资源：{', '.join(missing)}。", "在健康自检中下载缺失资源后可继续使用。")
+    return DiagnosticItem("运行资源", "ok", "模型、授权浏览器运行时和本地转录运行时均已安装。")
 
 
 def overall_status(items: list[DiagnosticItem]) -> str:

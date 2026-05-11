@@ -2,6 +2,9 @@
 #define AppVersion "0.1.0"
 #define AppPublisher "Synpture"
 #define AppExeName "Synpture.exe"
+#ifndef SetupBaseName
+#define SetupBaseName "SynptureSetup-Lite-x64"
+#endif
 
 [Setup]
 AppId={{B7E5B6E0-2F4D-4A37-8BC6-3E8C1EAA8A5A}
@@ -11,8 +14,8 @@ AppPublisher={#AppPublisher}
 DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-OutputDir=..\dist-installer
-OutputBaseFilename=SynptureSetup-x64
+OutputDir=..\Synpture
+OutputBaseFilename={#SetupBaseName}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

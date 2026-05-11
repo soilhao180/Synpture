@@ -55,11 +55,11 @@ class RuntimePathsTests(unittest.TestCase):
         self.assertEqual(env_path, data_root / ".env")
         content = env_path.read_text(encoding="utf-8")
         self.assertIn(f"OUTPUT_DIR={data_root / 'output'}", content)
-        self.assertIn(f"WHISPER_CPP_BIN={app_root / 'third_party' / 'whisper.cpp' / 'build-cuda' / 'bin' / 'whisper-cli.exe'}", content)
-        self.assertIn(f"WHISPER_CPP_CPU_BIN={app_root / 'third_party' / 'whisper.cpp' / 'build-core' / 'bin' / 'whisper-cli.exe'}", content)
-        self.assertIn(f"WHISPER_CPP_MODEL_PATH={app_root / 'models' / 'ggml-large-v3-turbo-q5_0.bin'}", content)
-        self.assertIn(f"FFMPEG_BIN={app_root / 'third_party' / 'ffmpeg' / 'bin' / 'ffmpeg.exe'}", content)
-        self.assertIn(f"SHARE_LINK_NODE_BIN={app_root / 'third_party' / 'node' / 'node.exe'}", content)
+        self.assertIn(f"WHISPER_CPP_BIN={data_root / 'third_party' / 'transcription_runtime' / 'whisper.cpp' / 'build-cuda' / 'bin' / 'whisper-cli.exe'}", content)
+        self.assertIn(f"WHISPER_CPP_CPU_BIN={data_root / 'third_party' / 'transcription_runtime' / 'whisper.cpp' / 'build-core' / 'bin' / 'whisper-cli.exe'}", content)
+        self.assertIn(f"WHISPER_CPP_MODEL_PATH={data_root / 'models' / 'ggml-large-v3-turbo-q5_0.bin'}", content)
+        self.assertIn(f"FFMPEG_BIN={data_root / 'third_party' / 'transcription_runtime' / 'ffmpeg' / 'bin' / 'ffmpeg.exe'}", content)
+        self.assertIn(f"SHARE_LINK_NODE_BIN={data_root / 'third_party' / 'browser_runtime' / 'node' / 'node.exe'}", content)
 
     def test_packaged_mode_keeps_user_env_overrides_and_backfills_missing_values(self) -> None:
         app_root = self.temp_dir / "bundle"
@@ -83,8 +83,8 @@ class RuntimePathsTests(unittest.TestCase):
 
         content = env_path.read_text(encoding="utf-8")
         self.assertIn("OUTPUT_DIR=C:/custom/output", content)
-        self.assertIn(f"WHISPER_CPP_BIN={app_root / 'third_party' / 'whisper.cpp' / 'build-cuda' / 'bin' / 'whisper-cli.exe'}", content)
-        self.assertIn(f"WHISPER_CPP_CPU_BIN={app_root / 'third_party' / 'whisper.cpp' / 'build-core' / 'bin' / 'whisper-cli.exe'}", content)
+        self.assertIn(f"WHISPER_CPP_BIN={data_root / 'third_party' / 'transcription_runtime' / 'whisper.cpp' / 'build-cuda' / 'bin' / 'whisper-cli.exe'}", content)
+        self.assertIn(f"WHISPER_CPP_CPU_BIN={data_root / 'third_party' / 'transcription_runtime' / 'whisper.cpp' / 'build-core' / 'bin' / 'whisper-cli.exe'}", content)
         self.assertIn("SUMMARY_API_MODEL=gpt-5.4", content)
 
     def test_load_settings_uses_packaged_defaults_when_env_missing(self) -> None:
@@ -117,8 +117,8 @@ class RuntimePathsTests(unittest.TestCase):
                     os.environ[key] = value
 
         self.assertEqual(settings.output_dir, data_root / "output")
-        self.assertEqual(settings.whisper_cpp_model_path, app_root / "models" / "ggml-large-v3-turbo-q5_0.bin")
-        self.assertEqual(settings.whisper_cpp_cpu_bin, str(app_root / "third_party" / "whisper.cpp" / "build-core" / "bin" / "whisper-cli.exe"))
+        self.assertEqual(settings.whisper_cpp_model_path, data_root / "models" / "ggml-large-v3-turbo-q5_0.bin")
+        self.assertEqual(settings.whisper_cpp_cpu_bin, str(data_root / "third_party" / "transcription_runtime" / "whisper.cpp" / "build-core" / "bin" / "whisper-cli.exe"))
 
     def test_template_registry_reads_from_bundled_templates_root(self) -> None:
         app_root = self.temp_dir / "bundle"

@@ -143,6 +143,9 @@ const state = {
   settingsResult: null,
   settingsBusyAction: null,
   transcriptionPrompt: null,
+  resourcePrompt: null,
+  resourceBusyId: null,
+  pendingResourceAction: null,
   transcriptionDetailsOpen: false,
   transcriptionBusyAction: null,
   pendingTranscriptionAction: null,
@@ -184,6 +187,14 @@ function isTaskRunning() {
 }
 
 function isActionDisabled(action) {
+  if (state.resourcePrompt) {
+    return ![
+      "download-runtime-resource",
+      "select-runtime-resource-file",
+      "retry-runtime-resource",
+      "dismiss-resource-prompt",
+    ].includes(action);
+  }
   if (state.transcriptionPrompt) {
     return ![
       "confirm-cpu-fallback",
@@ -895,7 +906,54 @@ function renderGlobalFeedback() {
   if (state.transcriptionPrompt) {
     parts.push(renderTranscriptionPrompt());
   }
+  if (state.resourcePrompt) {
+    parts.push(renderResourcePrompt());
+  }
   return parts.join("");
+}
+
+function getRuntimeResources() {
+  return state.bootstrap?.runtimeResources?.resources ?? [];
+}
+
+function findRuntimeResource(id) {
+  return getRuntimeResources().find((item) => item.id === id) ?? null;
+}
+
+function renderResourcePrompt() {
+  const resource = state.resourcePrompt;
+  const busy = state.resourceBusyId === resource.id;
+  return `
+    <div class="blocking-overlay" aria-modal="true" role="dialog">
+      <section class="blocking-card">
+        <div class="blocking-card-head">
+          <div class="blocking-card-copy">
+            <div class="drawer-eyebrow">运行资源</div>
+            <h2>${escapeHtml(resource.title ?? "需要下载运行资源")}</h2>
+            <p>${escapeHtml(resource.detail ?? resource.description ?? "当前功能需要补齐运行资源。")}</p>
+          </div>
+          <button class="drawer-icon-button" data-action="dismiss-resource-prompt" aria-label="关闭提示" title="关闭提示">×</button>
+        </div>
+        <div class="blocking-status-row">
+          <span class="status-pill">${escapeHtml(resource.state ?? "missing")}</span>
+          <span class="status-pill">${resource.sha256Configured ? "已配置校验" : "缺少 SHA256"}</span>
+          <span class="status-pill">${resource.urlConfigured ? "可下载" : "缺少下载地址"}</span>
+        </div>
+        <div class="blocking-details">
+          <p>安装位置：${escapeHtml(resource.targetPath ?? "")}</p>
+          ${resource.error ? `<p>${escapeHtml(resource.error)}</p>` : ""}
+          ${resource.progressPercent ? `<p>进度：${escapeHtml(String(resource.progressPercent))}%</p>` : ""}
+        </div>
+        <div class="button-row blocking-actions">
+          <button class="drawer-primary${busy ? " is-busy" : ""}" data-action="download-runtime-resource" data-resource-id="${escapeAttribute(resource.id)}" ${busy || !resource.urlConfigured || !resource.sha256Configured ? "disabled" : ""}>${busy ? "处理中..." : "下载并继续"}</button>
+          <button class="drawer-chip" data-action="select-runtime-resource-file" data-resource-id="${escapeAttribute(resource.id)}" ${busy ? "disabled" : ""}>选择本地文件</button>
+          <button class="drawer-chip" data-action="retry-runtime-resource" data-resource-id="${escapeAttribute(resource.id)}" ${busy ? "disabled" : ""}>重试检查</button>
+          <button class="drawer-chip" data-action="dismiss-resource-prompt" ${busy ? "disabled" : ""}>取消</button>
+        </div>
+        <input id="runtime-resource-file-input" class="hidden-file-input" type="file" />
+      </section>
+    </div>
+  `;
 }
 
 function renderTranscriptionPrompt() {
@@ -1060,6 +1118,7 @@ function renderHealthDrawer() {
           </div>
         </section>
       ` : ""}
+      ${health.hasRun ? renderRuntimeResourcesCard() : ""}
       ${health.hasRun ? `
         <section class="drawer-card">
           <div class="drawer-card-head">
@@ -1248,6 +1307,36 @@ function renderLocalMediaView() {
           <span class="upload-shell-value">${escapeHtml(state.localMediaLabel)}</span>
         </label>
         <button class="wide-primary" data-action="submit-local-media" ${canExecute ? "" : "disabled"}>开始执行</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderRuntimeResourcesCard() {
+  const resources = getRuntimeResources();
+  if (!resources.length) {
+    return "";
+  }
+  return `
+    <section class="drawer-card">
+      <div class="drawer-card-head">
+        <h3>运行资源</h3>
+      </div>
+      <div class="health-list">
+        ${resources.map((item) => `
+          <div class="health-item">
+            <div class="health-item-head">
+              <strong>${escapeHtml(item.title ?? item.id)}</strong>
+              <span class="drawer-pill ${item.ready ? "is-accent" : ""}">${escapeHtml(item.ready ? "可用" : item.state ?? "缺失")}</span>
+            </div>
+            <p>${escapeHtml(item.detail ?? item.description ?? "")}</p>
+            <div class="button-row">
+              <button class="drawer-chip" data-action="download-runtime-resource" data-resource-id="${escapeAttribute(item.id)}" ${item.ready || !item.urlConfigured || !item.sha256Configured || state.resourceBusyId === item.id ? "disabled" : ""}>${state.resourceBusyId === item.id ? "处理中..." : "下载"}</button>
+              <button class="drawer-chip" data-action="select-runtime-resource-file" data-resource-id="${escapeAttribute(item.id)}" ${state.resourceBusyId === item.id ? "disabled" : ""}>选择本地文件</button>
+              <button class="drawer-chip" data-action="retry-runtime-resource" data-resource-id="${escapeAttribute(item.id)}" ${state.resourceBusyId === item.id ? "disabled" : ""}>刷新</button>
+            </div>
+          </div>
+        `).join("")}
       </div>
     </section>
   `;
@@ -1772,6 +1861,18 @@ function bindEvents() {
     });
   }
 
+  const runtimeResourceInput = app.querySelector("#runtime-resource-file-input");
+  if (runtimeResourceInput) {
+    runtimeResourceInput.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0] ?? null;
+      const resourceId = event.target.dataset.resourceId;
+      event.target.value = "";
+      if (resourceId && file) {
+        await uploadRuntimeResourceFile(resourceId, file);
+      }
+    });
+  }
+
   const toast = app.querySelector("[data-toast-id]");
   if (toast) {
     toast.addEventListener("mouseenter", () => {
@@ -1887,6 +1988,24 @@ async function handleAction(action, dataset = {}) {
         return;
       case "check-auth":
         await runPlatformAction(dataset.platform, "status");
+        return;
+      case "download-runtime-resource":
+        if (dataset.resourceId) {
+          await downloadRuntimeResource(dataset.resourceId);
+        }
+        return;
+      case "select-runtime-resource-file":
+        if (dataset.resourceId) {
+          selectRuntimeResourceFile(dataset.resourceId);
+        }
+        return;
+      case "retry-runtime-resource":
+        if (dataset.resourceId) {
+          await retryRuntimeResource(dataset.resourceId);
+        }
+        return;
+      case "dismiss-resource-prompt":
+        dismissResourcePrompt();
         return;
       case "resume-first-pass-inline":
         await resumeFirstPassInline();
@@ -2047,6 +2166,9 @@ async function runSettingsAction(action, url, options = {}) {
 }
 
 async function runPlatformAction(platform, mode) {
+  if (mode === "open" && !(await ensureRuntimeResourcesReady(["browser_runtime"], "open-auth"))) {
+    return;
+  }
   try {
     const payload = await fetchJson(`/api/auth/${encodeURIComponent(platform)}/${mode === "open" ? "open" : "status"}`, {
       method: mode === "open" ? "POST" : "GET",
@@ -2057,6 +2179,146 @@ async function runPlatformAction(platform, mode) {
     showToast(error.message, "error");
   }
   safeRenderApp();
+}
+
+function dismissResourcePrompt() {
+  state.resourcePrompt = null;
+  state.pendingResourceAction = null;
+  safeRenderApp();
+}
+
+async function refreshRuntimeResources() {
+  const payload = await fetchJson("/api/runtime/resources");
+  state.bootstrap.runtimeResources = payload;
+  return payload.resources ?? [];
+}
+
+async function ensureRuntimeResourcesReady(resourceIds, pendingAction) {
+  const resources = await refreshRuntimeResources();
+  const missing = resourceIds.map((id) => resources.find((item) => item.id === id)).find((item) => item && !item.ready);
+  if (!missing) {
+    state.resourcePrompt = null;
+    state.pendingResourceAction = null;
+    return true;
+  }
+  state.resourcePrompt = missing;
+  state.pendingResourceAction = pendingAction;
+  safeRenderApp();
+  return false;
+}
+
+async function downloadRuntimeResource(resourceId) {
+  state.resourceBusyId = resourceId;
+  safeRenderApp();
+  try {
+    const status = await fetchJson(`/api/runtime/resources/${encodeURIComponent(resourceId)}/download`, { method: "POST" });
+    await pollRuntimeResource(resourceId, status);
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    state.resourceBusyId = null;
+    safeRenderApp();
+  }
+}
+
+async function pollRuntimeResource(resourceId, initialStatus = null) {
+  let status = initialStatus;
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    if (!status || ["downloading", "installing"].includes(status.state)) {
+      await wait(1000);
+      status = await fetchJson(`/api/runtime/resources/${encodeURIComponent(resourceId)}/status`);
+      const resource = findRuntimeResource(resourceId);
+      if (resource && state.resourcePrompt?.id === resourceId) {
+        state.resourcePrompt = { ...resource, ...status };
+      }
+      safeRenderApp();
+    }
+    if (status.ready || status.state === "ready") {
+      await refreshRuntimeResources();
+      showToast("运行资源已安装。");
+      await continuePendingResourceAction();
+      return;
+    }
+    if (status.state === "error" || status.state === "invalid") {
+      await refreshRuntimeResources();
+      showToast(status.error || status.detail || "资源安装失败。", "error");
+      return;
+    }
+  }
+  showToast("资源下载仍在进行，请稍后刷新状态。");
+}
+
+async function retryRuntimeResource(resourceId) {
+  state.resourceBusyId = resourceId;
+  safeRenderApp();
+  try {
+    await refreshRuntimeResources();
+    const resource = findRuntimeResource(resourceId);
+    state.resourcePrompt = resource?.ready ? null : resource;
+    if (resource?.ready) {
+      showToast("运行资源已可用。");
+      await continuePendingResourceAction();
+    }
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    state.resourceBusyId = null;
+    safeRenderApp();
+  }
+}
+
+function selectRuntimeResourceFile(resourceId) {
+  const input = app.querySelector("#runtime-resource-file-input");
+  if (!input) {
+    return;
+  }
+  input.dataset.resourceId = resourceId;
+  input.click();
+}
+
+async function uploadRuntimeResourceFile(resourceId, file) {
+  if (!file) {
+    return;
+  }
+  state.resourceBusyId = resourceId;
+  safeRenderApp();
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const status = await fetchJson(`/api/runtime/resources/${encodeURIComponent(resourceId)}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    await refreshRuntimeResources();
+    if (status.ready || status.state === "ready") {
+      showToast("运行资源已安装。");
+      await continuePendingResourceAction();
+    } else {
+      showToast(status.detail || "资源状态已更新。");
+    }
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    state.resourceBusyId = null;
+    safeRenderApp();
+  }
+}
+
+async function continuePendingResourceAction() {
+  const pending = state.pendingResourceAction;
+  state.resourcePrompt = null;
+  state.pendingResourceAction = null;
+  if (pending === "submit-share-link") {
+    await submitShareLink();
+  } else if (pending === "submit-local-media") {
+    await submitLocalMedia();
+  } else if (pending === "open-auth") {
+    showToast("授权运行时已可用，请重新点击打开授权。");
+  }
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function dismissTranscriptionPrompt() {
@@ -2073,6 +2335,9 @@ async function refreshTranscriptionCapability() {
 }
 
 async function ensureTranscriptionReady(actionKind) {
+  if (!(await ensureRuntimeResourcesReady(["model", "transcription_runtime"], actionKind))) {
+    return false;
+  }
   const capability = await refreshTranscriptionCapability();
   if (capability.gpuStatus === "ready" || (capability.cpuFallbackAvailable && capability.allowCpuFallback)) {
     state.transcriptionPrompt = null;

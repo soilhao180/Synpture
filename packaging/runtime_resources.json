@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "resources": [
+    {
+      "id": "model",
+      "title": "转录模型",
+      "description": "whisper.cpp large-v3-turbo q5_0 模型文件。",
+      "url": "https://github.com/soilhao180/Synpture/releases/download/runtime-assets/synpture-model-ggml-large-v3-turbo-q5_0.bin",
+      "sha256": "",
+      "archive": false,
+      "target": "models/ggml-large-v3-turbo-q5_0.bin",
+      "requiredFor": ["transcription"]
+    },
+    {
+      "id": "browser_runtime",
+      "title": "授权浏览器运行时",
+      "description": "Node、Playwright package 和 Chromium 授权运行时。",
+      "url": "https://github.com/soilhao180/Synpture/releases/download/runtime-assets/synpture-browser-runtime-win-x64.zip",
+      "sha256": "",
+      "archive": true,
+      "target": "third_party/browser_runtime",
+      "markers": [
+        "node/node.exe",
+        "node_runtime/node_modules/playwright/package.json",
+        "chromium/chrome.exe"
+      ],
+      "requiredFor": ["share_auth"]
+    },
+    {
+      "id": "transcription_runtime",
+      "title": "本地转录运行时",
+      "description": "ffmpeg/ffprobe 和 whisper.cpp GPU/CPU 预编译运行时。",
+      "url": "https://github.com/soilhao180/Synpture/releases/download/runtime-assets/synpture-transcription-runtime-win-x64.zip",
+      "sha256": "",
+      "archive": true,
+      "target": "third_party/transcription_runtime",
+      "markers": [
+        "ffmpeg/bin/ffmpeg.exe",
+        "ffmpeg/bin/ffprobe.exe",
+        "whisper.cpp/build-cuda/bin/whisper-cli.exe",
+        "whisper.cpp/build-core/bin/whisper-cli.exe"
+      ],
+      "requiredFor": ["transcription"]
+    }
+  ]
+}

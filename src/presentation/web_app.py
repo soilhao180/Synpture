@@ -32,6 +32,12 @@ from src.presentation.api_serializers import (
 from src.presentation.config_io import save_env_settings
 from src.presentation.task_registry import TaskRegistry
 from src.runtime_paths import bundled_path, ensure_runtime_env, get_env_path
+from src.runtime_resources import (
+    get_runtime_resource_status,
+    install_runtime_resource_file,
+    serialize_runtime_resources,
+    start_runtime_resource_download,
+)
 from src.services.summary_service import SummaryService
 from src.share_link_ingest import (
     get_managed_auth_user_data_dir,
@@ -140,6 +146,7 @@ class WorkspaceBackend:
             "settings": serialize_settings(self.settings),
             "browserRuntime": serialize_diagnostic_item(check_browser_runtime()),
             "transcription": self.get_transcription_capability_payload(),
+            "runtimeResources": self.get_runtime_resources_payload(),
             "health": self.get_health_payload(),
             "platforms": self.get_platform_statuses(),
             "runs": [serialize_run_list_item(item) for item in runs],
@@ -152,6 +159,39 @@ class WorkspaceBackend:
 
     def get_transcription_capability_payload(self) -> dict[str, Any]:
         return serialize_transcription_capability(probe_transcription_capability(self.settings))
+
+    def get_runtime_resources_payload(self) -> dict[str, Any]:
+        return {"resources": serialize_runtime_resources()}
+
+    def get_runtime_resource_status_payload(self, resource_id: str) -> dict[str, Any]:
+        try:
+            return get_runtime_resource_status(resource_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Unknown runtime resource: {resource_id}") from None
+
+    def start_runtime_resource_download_payload(self, resource_id: str) -> dict[str, Any]:
+        try:
+            payload = start_runtime_resource_download(resource_id)
+            self.reload()
+            return payload
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Unknown runtime resource: {resource_id}") from None
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    def install_runtime_resource_upload_payload(self, resource_id: str, file_name: str, file_bytes: bytes) -> dict[str, Any]:
+        try:
+            temp_dir = self.settings.output_dir / "_runtime_resource_uploads"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_path = temp_dir / (Path(file_name).name or f"{resource_id}.bin")
+            temp_path.write_bytes(file_bytes)
+            payload = install_runtime_resource_file(resource_id, temp_path)
+            self.reload()
+            return payload
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Unknown runtime resource: {resource_id}") from None
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     def save_transcription_preference_payload(self, payload: TranscriptionPreferenceRequest) -> dict[str, Any]:
         save_transcription_runtime_state(allow_cpu_fallback=payload.allowCpuFallback)
@@ -631,6 +671,22 @@ def create_web_app(
     @app.get("/api/runtime/transcription-capability")
     def get_transcription_capability() -> dict[str, Any]:
         return backend.get_transcription_capability_payload()
+
+    @app.get("/api/runtime/resources")
+    def get_runtime_resources() -> dict[str, Any]:
+        return backend.get_runtime_resources_payload()
+
+    @app.post("/api/runtime/resources/{resource_id}/download")
+    def post_runtime_resource_download(resource_id: str) -> dict[str, Any]:
+        return backend.start_runtime_resource_download_payload(resource_id)
+
+    @app.get("/api/runtime/resources/{resource_id}/status")
+    def get_runtime_resource_status(resource_id: str) -> dict[str, Any]:
+        return backend.get_runtime_resource_status_payload(resource_id)
+
+    @app.post("/api/runtime/resources/{resource_id}/upload")
+    async def post_runtime_resource_upload(resource_id: str, file: UploadFile = File(...)) -> dict[str, Any]:
+        return backend.install_runtime_resource_upload_payload(resource_id, file.filename or "resource.bin", await file.read())
 
     @app.post("/api/runtime/transcription-preference")
     def post_transcription_preference(payload: TranscriptionPreferenceRequest) -> dict[str, Any]:

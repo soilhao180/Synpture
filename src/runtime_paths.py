@@ -79,6 +79,16 @@ def get_managed_auth_root() -> Path:
     return get_user_data_root() / "managed_auth_profiles" if is_packaged() else get_app_root() / "output" / "managed_auth_profiles"
 
 
+def runtime_resource_path(*parts: str) -> Path:
+    user_candidate = get_user_data_root().joinpath(*parts)
+    bundle_candidate = bundled_path(*parts)
+    if user_candidate.exists():
+        return user_candidate
+    if bundle_candidate.exists():
+        return bundle_candidate
+    return user_candidate if is_packaged() else bundle_candidate
+
+
 def bundled_path(*parts: str) -> Path:
     bundle_candidate = get_bundle_root().joinpath(*parts)
     app_candidate = get_app_root().joinpath(*parts)
@@ -120,13 +130,13 @@ def ensure_runtime_env(env_path: Path | None = None) -> Path:
 def _merge_packaged_runtime_defaults(text: str, *, replace_existing: bool) -> str:
     defaults = {
         "OUTPUT_DIR": str(get_default_output_dir()),
-        "WHISPER_CPP_BIN": str(bundled_path("third_party", "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe")),
-        "WHISPER_CPP_CPU_BIN": str(bundled_path("third_party", "whisper.cpp", "build-core", "bin", "whisper-cli.exe")),
-        "WHISPER_CPP_MODEL_PATH": str(bundled_path("models", "ggml-large-v3-turbo-q5_0.bin")),
-        "FFMPEG_BIN": str(bundled_path("third_party", "ffmpeg", "bin", "ffmpeg.exe")),
-        "FFPROBE_BIN": str(bundled_path("third_party", "ffmpeg", "bin", "ffprobe.exe")),
-        "SHARE_LINK_NODE_BIN": str(bundled_path("third_party", "node", "node.exe")),
-        "SHARE_LINK_NODE_PATH": str(bundled_path("third_party", "node_runtime", "node_modules")),
+        "WHISPER_CPP_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe")),
+        "WHISPER_CPP_CPU_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "whisper.cpp", "build-core", "bin", "whisper-cli.exe")),
+        "WHISPER_CPP_MODEL_PATH": str(runtime_resource_path("models", "ggml-large-v3-turbo-q5_0.bin")),
+        "FFMPEG_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "ffmpeg", "bin", "ffmpeg.exe")),
+        "FFPROBE_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "ffmpeg", "bin", "ffprobe.exe")),
+        "SHARE_LINK_NODE_BIN": str(runtime_resource_path("third_party", "browser_runtime", "node", "node.exe")),
+        "SHARE_LINK_NODE_PATH": str(runtime_resource_path("third_party", "browser_runtime", "node_runtime", "node_modules")),
     }
     merged = text
     for key, value in defaults.items():

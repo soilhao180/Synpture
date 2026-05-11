@@ -28,7 +28,7 @@ class RuntimePathsPackagedLayoutTests(unittest.TestCase):
         ):
             self.assertEqual(runtime_paths.bundled_path("third_party", "ffmpeg", "bin", "ffmpeg.exe"), tool_path)
 
-    def test_packaged_env_rewrites_missing_runtime_paths_to_current_install(self) -> None:
+    def test_packaged_env_rewrites_missing_runtime_paths_to_user_runtime_resources(self) -> None:
         install_root = self.temp_dir / "install"
         bundle_root = install_root / "_internal"
         data_root = self.temp_dir / "data"
@@ -36,7 +36,7 @@ class RuntimePathsPackagedLayoutTests(unittest.TestCase):
         data_root.mkdir(parents=True, exist_ok=True)
         (bundle_root / ".env.example").write_text("OUTPUT_DIR=output\nFFMPEG_BIN=\n", encoding="utf-8")
 
-        ffmpeg_path = install_root / "third_party" / "ffmpeg" / "bin" / "ffmpeg.exe"
+        ffmpeg_path = data_root / "third_party" / "transcription_runtime" / "ffmpeg" / "bin" / "ffmpeg.exe"
         ffmpeg_path.parent.mkdir(parents=True, exist_ok=True)
         ffmpeg_path.write_text("stub", encoding="utf-8")
 

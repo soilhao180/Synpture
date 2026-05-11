@@ -1,4 +1,6 @@
 param(
+  [ValidateSet("Lite", "Full")]
+  [string]$Edition = "Lite",
   [string]$Python = "python",
   [string]$PyInstallerModule = "PyInstaller",
   [string]$ISCC = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
@@ -12,7 +14,8 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $distDir = Join-Path $root "dist"
-$installerDir = Join-Path $root "dist-installer"
+$releaseDir = Join-Path $root "Synpture"
+$installerDir = $releaseDir
 $specPath = Join-Path $root "packaging\synpture_launcher.spec"
 $issPath = Join-Path $root "packaging\SynptureInstaller.iss"
 $prepareRuntimeScript = Join-Path $root "scripts\prepare_windows_runtime.ps1"
@@ -23,6 +26,7 @@ $nodeRuntimeDir = Join-Path $root "third_party\node_runtime"
 $chromiumDir = Join-Path $root "third_party\chromium"
 $whisperCudaDir = Join-Path $root "third_party\whisper.cpp\build-cuda\bin"
 $modelPath = Join-Path $root "models\ggml-large-v3-turbo-q5_0.bin"
+$isFullEdition = $Edition -eq "Full"
 
 function Assert-PathExists {
   param(
@@ -156,16 +160,20 @@ Push-Location $root
 try {
   Assert-PathExists $specPath "Missing PyInstaller spec: $specPath"
   Assert-PathExists $issPath "Missing Inno Setup script: $issPath"
-  Assert-PathExists $prepareRuntimeScript "Missing runtime preparation script: $prepareRuntimeScript"
-  Assert-PathExists $whisperBuildScript "Missing whisper.cpp build script: $whisperBuildScript"
-  Assert-PathExists $modelPath "Missing bundled model file: $modelPath"
-  Assert-PathExists $whisperCudaDir "Missing whisper.cpp CUDA runtime folder: $whisperCudaDir"
-  Assert-PathExists (Join-Path $whisperCudaDir "whisper-cli.exe") "Missing whisper.cpp executable: $(Join-Path $whisperCudaDir 'whisper-cli.exe')"
+  if ($isFullEdition -or -not $SkipRuntimeProvision) {
+    Assert-PathExists $prepareRuntimeScript "Missing runtime preparation script: $prepareRuntimeScript"
+  }
+  if ($isFullEdition) {
+    Assert-PathExists $whisperBuildScript "Missing whisper.cpp build script: $whisperBuildScript"
+    Assert-PathExists $modelPath "Missing bundled model file: $modelPath"
+    Assert-PathExists $whisperCudaDir "Missing whisper.cpp CUDA runtime folder: $whisperCudaDir"
+    Assert-PathExists (Join-Path $whisperCudaDir "whisper-cli.exe") "Missing whisper.cpp executable: $(Join-Path $whisperCudaDir 'whisper-cli.exe')"
+  }
 
   & $Python -m pip install -r requirements.txt
   & $Python -m pip install pyinstaller
 
-  if (-not $SkipRuntimeProvision) {
+  if ($isFullEdition -and -not $SkipRuntimeProvision) {
     $prepareArgs = @(
       "-ExecutionPolicy", "Bypass",
       "-File", $prepareRuntimeScript,
@@ -181,10 +189,15 @@ try {
     }
   }
 
-  Ensure-PortableWhisperCudaRuntime -BinDir $whisperCudaDir -BuildScriptPath $whisperBuildScript
+  if ($isFullEdition) {
+    Ensure-PortableWhisperCudaRuntime -BinDir $whisperCudaDir -BuildScriptPath $whisperBuildScript
+  }
 
   if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
-  if (Test-Path $installerDir) { Remove-Item $installerDir -Recurse -Force }
+  if (-not (Test-Path $installerDir)) { New-Item -ItemType Directory -Path $installerDir | Out-Null }
+  Get-ChildItem -Path $installerDir -Filter "SynptureSetup-$Edition-x64.exe" -ErrorAction SilentlyContinue | Remove-Item -Force
+
+  $env:SYNPTURE_INSTALLER_EDITION = $Edition
 
   & $Python -m $PyInstallerModule --noconfirm $specPath
 
@@ -193,24 +206,27 @@ try {
     throw "PyInstaller output not found: $bundleRoot"
   }
 
-  Assert-PathExists $ffmpegDir "Missing bundled ffmpeg runtime: $ffmpegDir"
-  Assert-PathExists (Join-Path $ffmpegDir "ffmpeg.exe") "Missing ffmpeg.exe under: $ffmpegDir"
-  Assert-PathExists (Join-Path $ffmpegDir "ffprobe.exe") "Missing ffprobe.exe under: $ffmpegDir"
-  Assert-PathExists $nodeDir "Missing bundled Node runtime: $nodeDir"
-  Assert-PathExists (Join-Path $nodeDir "node.exe") "Missing node.exe under: $nodeDir"
-  Assert-PathExists $nodeRuntimeDir "Missing bundled Node package runtime: $nodeRuntimeDir"
-  Assert-PathExists (Join-Path $nodeRuntimeDir "node_modules\playwright") "Missing Playwright package under: $(Join-Path $nodeRuntimeDir 'node_modules\\playwright')"
-  Assert-PathExists $chromiumDir "Missing bundled Chromium runtime: $chromiumDir"
-  Assert-PathExists (Join-Path $chromiumDir "chrome.exe") "Missing chrome.exe under: $chromiumDir"
+  if ($isFullEdition) {
+    Assert-PathExists $ffmpegDir "Missing bundled ffmpeg runtime: $ffmpegDir"
+    Assert-PathExists (Join-Path $ffmpegDir "ffmpeg.exe") "Missing ffmpeg.exe under: $ffmpegDir"
+    Assert-PathExists (Join-Path $ffmpegDir "ffprobe.exe") "Missing ffprobe.exe under: $ffmpegDir"
+    Assert-PathExists $nodeDir "Missing bundled Node runtime: $nodeDir"
+    Assert-PathExists (Join-Path $nodeDir "node.exe") "Missing node.exe under: $nodeDir"
+    Assert-PathExists $nodeRuntimeDir "Missing bundled Node package runtime: $nodeRuntimeDir"
+    Assert-PathExists (Join-Path $nodeRuntimeDir "node_modules\playwright") "Missing Playwright package under: $(Join-Path $nodeRuntimeDir 'node_modules\\playwright')"
+    Assert-PathExists $chromiumDir "Missing bundled Chromium runtime: $chromiumDir"
+    Assert-PathExists (Join-Path $chromiumDir "chrome.exe") "Missing chrome.exe under: $chromiumDir"
 
-  Copy-Item $ffmpegDir (Join-Path $bundleRoot "third_party\ffmpeg\bin") -Recurse -Force
-  Copy-Item $nodeDir (Join-Path $bundleRoot "third_party\node") -Recurse -Force
-  Copy-Item $nodeRuntimeDir (Join-Path $bundleRoot "third_party\node_runtime") -Recurse -Force
-  Copy-Item $chromiumDir (Join-Path $bundleRoot "third_party\chromium") -Recurse -Force
+    Copy-Item $ffmpegDir (Join-Path $bundleRoot "third_party\ffmpeg\bin") -Recurse -Force
+    Copy-Item $nodeDir (Join-Path $bundleRoot "third_party\node") -Recurse -Force
+    Copy-Item $nodeRuntimeDir (Join-Path $bundleRoot "third_party\node_runtime") -Recurse -Force
+    Copy-Item $chromiumDir (Join-Path $bundleRoot "third_party\chromium") -Recurse -Force
+  }
 
   $resolvedISCC = Ensure-InnoSetupCompiler -CompilerPath $ISCC -SkipAutoInstall:$SkipInnoSetupAutoInstall
-  & $resolvedISCC $issPath
+  & $resolvedISCC "/DSetupBaseName=SynptureSetup-$Edition-x64" $issPath
 }
 finally {
+  Remove-Item Env:\SYNPTURE_INSTALLER_EDITION -ErrorAction SilentlyContinue
   Pop-Location
 }

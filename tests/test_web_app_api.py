@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from src.diagnostics import DiagnosticItem
 from src.presentation import web_app
+import src.runtime_resources as runtime_resources
 from src.transcription_runtime import TranscriptionCapability
 from src.utils import write_json
 
@@ -44,6 +46,9 @@ class WebAppApiTests(unittest.TestCase):
             with_first_pass=True,
             with_template=True,
         )
+        runtime_data_patch = patch("src.runtime_paths.get_user_data_root", return_value=self.output_root / "runtime_data")
+        runtime_data_patch.start()
+        self.addCleanup(runtime_data_patch.stop)
 
         with patch.object(web_app, "ENV_PATH", self.env_path):
             client = TestClient(web_app.create_web_app())
@@ -54,6 +59,11 @@ class WebAppApiTests(unittest.TestCase):
         self.assertEqual(payload["defaultToolView"], "share_link")
         self.assertEqual(payload["runs"][0]["id"], "run_20260501_090000")
         self.assertIn("browserRuntime", payload)
+        self.assertIn("runtimeResources", payload)
+        self.assertEqual(
+            {item["id"] for item in payload["runtimeResources"]["resources"]},
+            {"model", "browser_runtime", "transcription_runtime"},
+        )
 
         run_list = client.get("/api/runs")
         self.assertEqual(run_list.status_code, 200)
@@ -72,8 +82,24 @@ class WebAppApiTests(unittest.TestCase):
         download = client.get("/api/runs/run_20260501_090000/download/first_pass.json")
         self.assertEqual(download.status_code, 200)
 
+        resources = client.get("/api/runtime/resources")
+        self.assertEqual(resources.status_code, 200)
+        model = next(item for item in resources.json()["resources"] if item["id"] == "model")
+        self.assertFalse(model["ready"])
+        self.assertFalse(model["sha256Configured"])
+
+        blocked_download = client.post("/api/runtime/resources/model/download")
+        self.assertEqual(blocked_download.status_code, 400)
+        self.assertIn("SHA256", blocked_download.json()["detail"])
+
+        missing_resource = client.get("/api/runtime/resources/unknown/status")
+        self.assertEqual(missing_resource.status_code, 404)
+
     def test_settings_and_health_routes(self) -> None:
-        with patch.object(web_app, "ENV_PATH", self.env_path):
+        with (
+            patch.object(web_app, "ENV_PATH", self.env_path),
+            patch("src.runtime_paths.get_user_data_root", return_value=self.output_root / "runtime_data"),
+        ):
             client = TestClient(web_app.create_web_app())
 
         settings_response = client.get("/api/settings")
@@ -175,8 +201,50 @@ class WebAppApiTests(unittest.TestCase):
                 self.assertEqual(current.status_code, 200)
                 self.assertTrue(current.json()["cpuFallbackAvailable"])
 
+    def test_runtime_resource_upload_installs_local_file(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="synpture_resource_upload_"))
+        self.addCleanup(lambda: shutil.rmtree(temp_dir, ignore_errors=True))
+        manifest = temp_dir / "runtime_resources.json"
+        manifest.write_text(
+            """
+            {
+              "resources": [
+                {
+                  "id": "sample",
+                  "title": "Sample Runtime",
+                  "description": "sample",
+                  "url": "",
+                  "sha256": "",
+                  "archive": false,
+                  "target": "models/sample.bin",
+                  "requiredFor": ["test"]
+                }
+              ]
+            }
+            """,
+            encoding="utf-8",
+        )
+
+        with (
+            patch.object(web_app, "ENV_PATH", self.env_path),
+            patch.object(runtime_resources, "MANIFEST_PATH", manifest),
+            patch("src.runtime_paths.get_user_data_root", return_value=temp_dir / "data"),
+        ):
+            client = TestClient(web_app.create_web_app())
+            upload = client.post(
+                "/api/runtime/resources/sample/upload",
+                files={"file": ("sample.bin", b"runtime", "application/octet-stream")},
+            )
+
+        self.assertEqual(upload.status_code, 200)
+        self.assertTrue(upload.json()["ready"])
+        self.assertTrue((temp_dir / "data" / "models" / "sample.bin").exists())
+
     def test_frontend_session_routes_track_open_heartbeat_and_close(self) -> None:
-        with patch.object(web_app, "ENV_PATH", self.env_path):
+        with (
+            patch.object(web_app, "ENV_PATH", self.env_path),
+            patch("src.runtime_paths.get_user_data_root", return_value=self.output_root / "runtime_data"),
+        ):
             client = TestClient(web_app.create_web_app())
 
         initial = client.get("/api/runtime/frontend-session")
@@ -228,7 +296,10 @@ class WebAppApiTests(unittest.TestCase):
         self.env_path.write_text("SUMMARY_API_KEY=sk-existing\nSUMMARY_API_MODEL=gpt-5.4\n", encoding="utf-8")
         os.environ["SUMMARY_API_KEY"] = "sk-existing"
 
-        with patch.object(web_app, "ENV_PATH", self.env_path):
+        with (
+            patch.object(web_app, "ENV_PATH", self.env_path),
+            patch("src.runtime_paths.get_user_data_root", return_value=self.output_root / "runtime_data"),
+        ):
             client = TestClient(web_app.create_web_app())
 
         saved = client.post(

@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -7,6 +8,8 @@ from PyInstaller.utils.hooks import collect_submodules
 
 PROJECT_ROOT = Path.cwd()
 APP_ICON = PROJECT_ROOT / "assets" / "branding" / "synpture-app.ico"
+EDITION = os.environ.get("SYNPTURE_INSTALLER_EDITION", "Lite").strip().lower()
+IS_FULL = EDITION == "full"
 
 
 def add_tree(source: str, target: str):
@@ -17,24 +20,29 @@ def add_tree(source: str, target: str):
 
 
 datas = []
-for source_dir in (".env.example", "workspace-ui", "assets", "templates", "tools", "models"):
-    if source_dir == ".env.example":
-        env_example = PROJECT_ROOT / source_dir
-        if env_example.exists():
-            datas.append((str(env_example), "."))
-        continue
+env_example = PROJECT_ROOT / ".env.example"
+if env_example.exists():
+    datas.append((str(env_example), "."))
+
+runtime_manifest = PROJECT_ROOT / "packaging" / "runtime_resources.json"
+if runtime_manifest.exists():
+    datas.append((str(runtime_manifest), "packaging"))
+
+for source_dir in ("workspace-ui", "assets", "templates", "tools"):
     datas.extend(add_tree(source_dir, source_dir))
 
-for whisper_bin_dir in (
-    PROJECT_ROOT / "third_party" / "whisper.cpp" / "build-cuda" / "bin",
-    PROJECT_ROOT / "third_party" / "whisper.cpp" / "build-core" / "bin",
-):
-    if whisper_bin_dir.exists():
-        datas.extend(
-            (str(path), str(Path("third_party") / path.parent.relative_to(PROJECT_ROOT / "third_party")))
-            for path in whisper_bin_dir.rglob("*")
-            if path.is_file() and path.suffix.lower() in {".exe", ".dll"}
-        )
+if IS_FULL:
+    datas.extend(add_tree("models", "models"))
+    for whisper_bin_dir in (
+        PROJECT_ROOT / "third_party" / "whisper.cpp" / "build-cuda" / "bin",
+        PROJECT_ROOT / "third_party" / "whisper.cpp" / "build-core" / "bin",
+    ):
+        if whisper_bin_dir.exists():
+            datas.extend(
+                (str(path), str(Path("third_party") / path.parent.relative_to(PROJECT_ROOT / "third_party")))
+                for path in whisper_bin_dir.rglob("*")
+                if path.is_file() and path.suffix.lower() in {".exe", ".dll"}
+            )
 
 hiddenimports = (
     collect_submodules("uvicorn")

@@ -20,6 +20,7 @@ output/
 build/
 dist/
 dist-installer/
+Synpture/
 
 # Large model files
 models/

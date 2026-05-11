@@ -14,7 +14,7 @@ from typing import Callable
 from src.config import Settings
 from src.link_ingest.platforms import detect_platform
 from src.link_ingest.yt_dlp_client import YtDlpClient
-from src.runtime_paths import bundled_path, get_app_root, get_managed_auth_root
+from src.runtime_paths import bundled_path, get_app_root, get_managed_auth_root, runtime_resource_path
 from src.utils import ensure_directory, hidden_subprocess_kwargs, run_command, slugify_filename, write_json
 
 
@@ -477,6 +477,9 @@ def resolve_node_bin() -> str:
     env_value = os.getenv("SHARE_LINK_NODE_BIN")
     if env_value:
         return env_value
+    runtime_node = runtime_resource_path("third_party", "browser_runtime", "node", "node.exe")
+    if runtime_node.exists():
+        return str(runtime_node)
     bundled_node = bundled_path("third_party", "node", "node.exe")
     if bundled_node.exists():
         return str(bundled_node)
@@ -487,10 +490,12 @@ def resolve_node_bin() -> str:
 
 def build_node_env() -> dict[str, str]:
     env = dict(os.environ)
+    runtime_node_modules = runtime_resource_path("third_party", "browser_runtime", "node_runtime", "node_modules")
     bundled_node_modules = bundled_path("third_party", "node_runtime", "node_modules")
     legacy_bundled_node_modules = bundled_path("third_party", "node", "node_modules")
     node_path_candidates = [
         os.getenv("SHARE_LINK_NODE_PATH"),
+        str(runtime_node_modules) if runtime_node_modules.exists() else None,
         str(bundled_node_modules) if bundled_node_modules.exists() else None,
         str(legacy_bundled_node_modules) if legacy_bundled_node_modules.exists() else None,
         str(DEFAULT_NODE_MODULES) if DEFAULT_NODE_MODULES.exists() else None,
@@ -501,7 +506,10 @@ def build_node_env() -> dict[str, str]:
         if existing:
             node_path_values.append(existing)
         env["NODE_PATH"] = os.pathsep.join(node_path_values)
+    runtime_chromium = runtime_resource_path("third_party", "browser_runtime", "chromium", "chrome.exe")
     bundled_chromium = bundled_path("third_party", "chromium", "chrome.exe")
+    if runtime_chromium.exists():
+        env.setdefault("SHARE_LINK_CHROME_EXE", str(runtime_chromium))
     if bundled_chromium.exists():
         env.setdefault("SHARE_LINK_CHROME_EXE", str(bundled_chromium))
     if DEFAULT_CHROME_PATH.exists():

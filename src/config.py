@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.runtime_paths import bundled_path, ensure_runtime_env, get_app_root, get_default_output_dir, get_env_path
+from src.runtime_paths import bundled_path, ensure_runtime_env, get_app_root, get_default_output_dir, get_env_path, runtime_resource_path
 
 try:
     from dotenv import load_dotenv
@@ -24,8 +24,8 @@ class Settings:
     output_dir: Path = DEFAULT_OUTPUT_DIR
     transcribe_backend: str = "auto"
     whisper_cpp_bin: str = "whisper-cli"
-    whisper_cpp_cpu_bin: str = str(bundled_path("third_party", "whisper.cpp", "build-core", "bin", "whisper-cli.exe"))
-    whisper_cpp_model_path: Path = bundled_path("models", "ggml-large-v3-turbo-q5_0.bin")
+    whisper_cpp_cpu_bin: str = str(runtime_resource_path("third_party", "transcription_runtime", "whisper.cpp", "build-core", "bin", "whisper-cli.exe"))
+    whisper_cpp_model_path: Path = runtime_resource_path("models", "ggml-large-v3-turbo-q5_0.bin")
     local_whisper_device: str = "auto"
     local_whisper_language: str = "zh"
     local_whisper_prompt: str = ""
@@ -60,7 +60,7 @@ def load_settings(env_path: str | Path | None = None) -> Settings:
         output_dir = PROJECT_ROOT / output_dir
 
     whisper_cpp_model_path = Path(
-        os.getenv("WHISPER_CPP_MODEL_PATH", str(bundled_path("models", "ggml-large-v3-turbo-q5_0.bin")))
+        os.getenv("WHISPER_CPP_MODEL_PATH", str(runtime_resource_path("models", "ggml-large-v3-turbo-q5_0.bin")))
     )
     if not whisper_cpp_model_path.is_absolute():
         whisper_cpp_model_path = PROJECT_ROOT / whisper_cpp_model_path
@@ -70,10 +70,13 @@ def load_settings(env_path: str | Path | None = None) -> Settings:
         ffprobe_bin=os.getenv("FFPROBE_BIN", "ffprobe"),
         output_dir=output_dir,
         transcribe_backend=os.getenv("TRANSCRIBE_BACKEND", "auto").strip().lower(),
-        whisper_cpp_bin=os.getenv("WHISPER_CPP_BIN", "whisper-cli"),
+        whisper_cpp_bin=os.getenv(
+            "WHISPER_CPP_BIN",
+            str(runtime_resource_path("third_party", "transcription_runtime", "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe")),
+        ),
         whisper_cpp_cpu_bin=os.getenv(
             "WHISPER_CPP_CPU_BIN",
-            str(bundled_path("third_party", "whisper.cpp", "build-core", "bin", "whisper-cli.exe")),
+            str(runtime_resource_path("third_party", "transcription_runtime", "whisper.cpp", "build-core", "bin", "whisper-cli.exe")),
         ),
         whisper_cpp_model_path=whisper_cpp_model_path,
         local_whisper_device=os.getenv("LOCAL_WHISPER_DEVICE", "auto").strip().lower(),
