@@ -1797,6 +1797,7 @@ function bindEvents() {
 
   app.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {
+      syncSettingsFormFromDom();
       await handleAction(button.getAttribute("data-action"), button.dataset);
     });
   });
@@ -1886,6 +1887,14 @@ function bindEvents() {
   }
 }
 
+function syncSettingsFormFromDom() {
+  app.querySelectorAll("[data-setting]").forEach((input) => {
+    if (input.dataset.setting) {
+      state.settingsForm[input.dataset.setting] = input.value;
+    }
+  });
+}
+
 async function handleAction(action, dataset = {}) {
   clearToast();
   if (isActionDisabled(action) && !["toggle-progress-details", "toggle-raw-transcript", "dismiss-toast", "enter-workspace", "retry-bootstrap"].includes(action)) {
@@ -1951,16 +1960,27 @@ async function handleAction(action, dataset = {}) {
         await saveSettings();
         return;
       case "test-connection":
-        await runSettingsAction("test-connection", "/api/settings/test-connection", { method: "POST" });
+        await runSettingsAction("test-connection", "/api/settings/test-connection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildSettingsRequestPayload()),
+        });
         return;
       case "load-models":
-        await runSettingsAction("load-models", "/api/settings/models");
+        await runSettingsAction("load-models", "/api/settings/models", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildSettingsRequestPayload()),
+        });
         return;
       case "test-model":
         await runSettingsAction("test-model", "/api/settings/test-model", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modelName: state.settingsForm.summaryApiModel }),
+          body: JSON.stringify({
+            ...buildSettingsRequestPayload(),
+            modelName: state.settingsForm.summaryApiModel,
+          }),
         });
         return;
       case "submit-share-link":
@@ -2135,10 +2155,7 @@ async function saveSettings() {
     const payload = await fetchJson("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...state.settingsForm,
-        keepExistingApiKey: !state.settingsForm.summaryApiKey?.trim(),
-      }),
+      body: JSON.stringify(buildSettingsRequestPayload()),
     });
     state.bootstrap.settings = payload;
     state.settingsResult = { ok: true, message: "系统设置已保存。" };
@@ -2149,6 +2166,14 @@ async function saveSettings() {
     state.settingsBusyAction = null;
   }
   safeRenderApp();
+}
+
+function buildSettingsRequestPayload() {
+  syncSettingsFormFromDom();
+  return {
+    ...state.settingsForm,
+    keepExistingApiKey: !state.settingsForm.summaryApiKey?.trim(),
+  };
 }
 
 async function runSettingsAction(action, url, options = {}) {

@@ -11,6 +11,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from src.diagnostics import DiagnosticItem
+from src.models import TestResult
 from src.presentation import web_app
 import src.runtime_resources as runtime_resources
 from src.transcription_runtime import TranscriptionCapability
@@ -153,6 +154,38 @@ class WebAppApiTests(unittest.TestCase):
             self.assertEqual(test_model.status_code, 200)
             self.assertFalse(test_model.json()["ok"])
             self.assertIn("SUMMARY_API_KEY", test_model.json()["message"])
+        finally:
+            _restore_env("SUMMARY_API_KEY", original_summary_api_key)
+
+    def test_settings_actions_can_use_unsaved_form_values(self) -> None:
+        original_summary_api_key = os.environ.get("SUMMARY_API_KEY")
+        os.environ.pop("SUMMARY_API_KEY", None)
+        self.env_path.write_text("SUMMARY_API_MODEL=gpt-5.4\n", encoding="utf-8")
+
+        captured = []
+
+        def fake_test_connection(settings):
+            captured.append((settings.summary_api_base_url, settings.summary_api_key, settings.summary_api_model))
+            return TestResult(ok=True, kind="summary_connection", message="ok")
+
+        try:
+            with patch.object(web_app, "ENV_PATH", self.env_path):
+                with patch.object(web_app.SummaryService, "test_summary_connection", side_effect=fake_test_connection):
+                    client = TestClient(web_app.create_web_app())
+                    response = client.post(
+                        "/api/settings/test-connection",
+                        json={
+                            "summaryApiBaseUrl": "https://api.example.com/v1",
+                            "summaryApiKey": "sk-unsaved",
+                            "summaryApiModel": "gpt-test",
+                            "transcribeBackend": "auto",
+                            "keepExistingApiKey": False,
+                        },
+                    )
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()["ok"])
+            self.assertEqual(captured, [("https://api.example.com/v1", "sk-unsaved", "gpt-test")])
+            self.assertNotIn("sk-unsaved", self.env_path.read_text(encoding="utf-8"))
         finally:
             _restore_env("SUMMARY_API_KEY", original_summary_api_key)
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import threading
 import time
 from typing import Any, Callable
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -88,6 +88,10 @@ class SettingsSaveRequest(BaseModel):
 
 
 class ModelTestRequest(BaseModel):
+    modelName: str | None = None
+
+
+class SettingsTestRequest(SettingsSaveRequest):
     modelName: str | None = None
 
 
@@ -227,11 +231,29 @@ class WorkspaceBackend:
     def test_summary_connection(self) -> dict[str, Any]:
         return self._serialize_test_result(self.summary_service.test_summary_connection(self.settings))
 
-    def list_summary_models(self) -> dict[str, Any]:
-        return self._serialize_test_result(self.summary_service.list_summary_models(self.settings))
+    def test_summary_connection_with_payload(self, payload: SettingsSaveRequest) -> dict[str, Any]:
+        return self._serialize_test_result(self.summary_service.test_summary_connection(self._settings_from_payload(payload)))
 
-    def test_summary_model(self, model_name: str | None) -> dict[str, Any]:
-        return self._serialize_test_result(self.summary_service.test_summary_model_call(self.settings, model_name))
+    def list_summary_models(self, payload: SettingsSaveRequest | None = None) -> dict[str, Any]:
+        settings = self._settings_from_payload(payload) if payload else self.settings
+        return self._serialize_test_result(self.summary_service.list_summary_models(settings))
+
+    def test_summary_model(self, model_name: str | None, payload: SettingsSaveRequest | None = None) -> dict[str, Any]:
+        settings = self._settings_from_payload(payload) if payload else self.settings
+        return self._serialize_test_result(self.summary_service.test_summary_model_call(settings, model_name))
+
+    def _settings_from_payload(self, payload: SettingsSaveRequest) -> Any:
+        if payload.keepExistingApiKey and not payload.summaryApiKey.strip():
+            next_api_key = self.settings.summary_api_key or ""
+        else:
+            next_api_key = payload.summaryApiKey
+        return replace(
+            self.settings,
+            summary_api_base_url=payload.summaryApiBaseUrl.strip() or None,
+            summary_api_key=next_api_key.strip() or None,
+            summary_api_model=payload.summaryApiModel.strip() or self.settings.summary_api_model,
+            transcribe_backend=payload.transcribeBackend.strip().lower() or self.settings.transcribe_backend,
+        )
 
     def get_health_payload(self) -> dict[str, Any]:
         if not self.health_items:
@@ -720,16 +742,23 @@ def create_web_app(
         return backend.save_settings_payload(payload)
 
     @app.post("/api/settings/test-connection")
-    def post_settings_test_connection() -> dict[str, Any]:
+    async def post_settings_test_connection(request: Request) -> dict[str, Any]:
+        payload_data = await _read_optional_json_body(request)
+        if payload_data:
+            return backend.test_summary_connection_with_payload(SettingsSaveRequest(**payload_data))
         return backend.test_summary_connection()
 
     @app.get("/api/settings/models")
     def get_settings_models() -> dict[str, Any]:
         return backend.list_summary_models()
 
+    @app.post("/api/settings/models")
+    def post_settings_models(payload: SettingsSaveRequest) -> dict[str, Any]:
+        return backend.list_summary_models(payload)
+
     @app.post("/api/settings/test-model")
-    def post_settings_test_model(payload: ModelTestRequest) -> dict[str, Any]:
-        return backend.test_summary_model(payload.modelName)
+    def post_settings_test_model(payload: SettingsTestRequest) -> dict[str, Any]:
+        return backend.test_summary_model(payload.modelName, payload)
 
     @app.post("/api/auth/{platform}/open")
     def post_auth_open(platform: str) -> dict[str, Any]:
@@ -756,6 +785,17 @@ def create_web_app(
     app.mount("/shared-assets", StaticFiles(directory=SHARED_ASSET_ROOT), name="shared_assets")
     app.mount("/", StaticFiles(directory=WORKSPACE_UI_ROOT, html=True), name="workspace_ui")
     return app
+
+
+async def _read_optional_json_body(request: Request) -> dict[str, Any]:
+    body = await request.body()
+    if not body:
+        return {}
+    try:
+        payload = await request.json()
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _render_workspace_index() -> str:
