@@ -1,0 +1,3 @@
+display_name: 极简摘要
+short_description: 用最少阅读时间看懂核心内容
+default_prompt: 基于首轮底稿生成极简摘要版本

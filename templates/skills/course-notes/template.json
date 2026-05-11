@@ -1,0 +1,24 @@
+{
+  "id": "course-notes",
+  "name": "课程笔记",
+  "description": "重组为便于复习的笔记结构。",
+  "input_fields": [
+    "cleaned_transcript",
+    "high_value_points",
+    "objective_context"
+  ],
+  "output_fields": [
+    "overview",
+    "key_points",
+    "section_summaries",
+    "template_fields"
+  ],
+  "prompt_instructions": "把内容重组为复习友好的笔记，而不是连续正文。",
+  "fallback_rules": {
+    "mode": "heuristic",
+    "notes": [
+      "主线放前面",
+      "术语和理解补充放后面"
+    ]
+  }
+}

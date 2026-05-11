@@ -1,0 +1,26 @@
+{
+  "id": "study-deep-dive",
+  "name": "学习精读",
+  "description": "把内容讲清楚，适合认真学懂这份材料。",
+  "input_fields": [
+    "cleaned_transcript",
+    "headline_verdict",
+    "value_rating",
+    "high_value_points",
+    "objective_context"
+  ],
+  "output_fields": [
+    "overview",
+    "key_points",
+    "section_summaries",
+    "template_fields"
+  ],
+  "prompt_instructions": "偏理解和系统学习，保留原逻辑，补足关键前提，但不要做主观批判。",
+  "fallback_rules": {
+    "mode": "heuristic",
+    "notes": [
+      "优先复用高价值要点",
+      "把客观补充转成学习提醒"
+    ]
+  }
+}

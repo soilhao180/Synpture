@@ -1,0 +1,23 @@
+{
+  "id": "minimal-summary",
+  "name": "极简摘要",
+  "description": "压到最短，只保留最核心信息。",
+  "input_fields": [
+    "headline_verdict",
+    "high_value_points",
+    "low_value_segments"
+  ],
+  "output_fields": [
+    "overview",
+    "key_points",
+    "section_summaries",
+    "template_fields"
+  ],
+  "prompt_instructions": "极度压缩，避免展开背景，不要写成长文。",
+  "fallback_rules": {
+    "mode": "heuristic",
+    "notes": [
+      "只保留最少量的关键点"
+    ]
+  }
+}

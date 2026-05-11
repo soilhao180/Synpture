@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Node
+node_modules/
+workspace-ui/node_modules/
+
+# Local settings and tool metadata
+.env
+.adnify/
+
+# User output and generated media
+output/
+*.wav
+*.mp4
+
+# Build artifacts
+build/
+dist/
+dist-installer/
+
+# Large model files
+models/
+
+# Downloaded/runtime payloads restored by scripts
+third_party/*
+!third_party/.gitkeep
+
+# Temporary binaries and archives
+*.zip
+*.7z
+*.tar
+*.gz
+*.obj
+tools/msvc_smoke_test.exe
+
+# Temporary logs/screenshots
+*.log
+_tmp_*.png
+workspace-ui/.tmp-*.png

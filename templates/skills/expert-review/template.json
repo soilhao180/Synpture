@@ -1,0 +1,26 @@
+{
+  "id": "expert-review",
+  "name": "专业点评",
+  "description": "站在懂行视角看内容质量、盲点和边界。",
+  "input_fields": [
+    "headline_verdict",
+    "value_rating",
+    "value_reason",
+    "high_value_points",
+    "low_value_segments"
+  ],
+  "output_fields": [
+    "overview",
+    "key_points",
+    "section_summaries",
+    "template_fields"
+  ],
+  "prompt_instructions": "允许主观判断，但必须显式区分原文依据和专业判断。",
+  "fallback_rules": {
+    "mode": "heuristic",
+    "notes": [
+      "先列原文依据",
+      "再给专业判断"
+    ]
+  }
+}

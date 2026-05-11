@@ -1,0 +1,24 @@
+{
+  "id": "action-extraction",
+  "name": "行动提炼",
+  "description": "把内容拆成原文动作和 AI 延伸建议。",
+  "input_fields": [
+    "cleaned_transcript",
+    "high_value_points",
+    "objective_context"
+  ],
+  "output_fields": [
+    "overview",
+    "key_points",
+    "section_summaries",
+    "template_fields"
+  ],
+  "prompt_instructions": "必须区分原文动作和 AI 延伸建议，不能把两者混写。",
+  "fallback_rules": {
+    "mode": "heuristic",
+    "notes": [
+      "先抽原文动作",
+      "再补 AI 延伸建议"
+    ]
+  }
+}

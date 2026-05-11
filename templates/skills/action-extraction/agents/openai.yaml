@@ -1,0 +1,3 @@
+display_name: 行动提炼
+short_description: 把内容转成动作，并区分原文与延伸建议
+default_prompt: 基于首轮底稿生成行动提炼版本

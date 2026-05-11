@@ -1,0 +1,3 @@
+display_name: 专业点评
+short_description: 用懂行视角判断内容质量与边界
+default_prompt: 基于首轮底稿生成专业点评版本

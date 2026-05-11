@@ -1,0 +1,13 @@
+{
+  "name": "synpture-workspace-ui-mock",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Design-first workspace mock frontend for Synpture",
+  "scripts": {
+    "start": "python -m http.server 4173",
+    "serve": "python -m http.server 4173"
+  },
+  "dependencies": {
+    "ogl": "^1.0.11"
+  }
+}
