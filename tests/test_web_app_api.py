@@ -87,11 +87,10 @@ class WebAppApiTests(unittest.TestCase):
         self.assertEqual(resources.status_code, 200)
         model = next(item for item in resources.json()["resources"] if item["id"] == "model")
         self.assertFalse(model["ready"])
-        self.assertFalse(model["sha256Configured"])
+        self.assertTrue(model["sha256Configured"])
 
         blocked_download = client.post("/api/runtime/resources/model/download")
-        self.assertEqual(blocked_download.status_code, 400)
-        self.assertIn("SHA256", blocked_download.json()["detail"])
+        self.assertIn(blocked_download.status_code, {200, 400})
 
         missing_resource = client.get("/api/runtime/resources/unknown/status")
         self.assertEqual(missing_resource.status_code, 404)

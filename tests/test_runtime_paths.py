@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -58,8 +59,14 @@ class RuntimePathsTests(unittest.TestCase):
         self.assertIn(f"WHISPER_CPP_BIN={data_root / 'third_party' / 'transcription_runtime' / 'whisper.cpp' / 'build-cuda' / 'bin' / 'whisper-cli.exe'}", content)
         self.assertIn(f"WHISPER_CPP_CPU_BIN={data_root / 'third_party' / 'transcription_runtime' / 'whisper.cpp' / 'build-core' / 'bin' / 'whisper-cli.exe'}", content)
         self.assertIn(f"WHISPER_CPP_MODEL_PATH={data_root / 'models' / 'ggml-large-v3-turbo-q5_0.bin'}", content)
-        self.assertIn(f"FFMPEG_BIN={data_root / 'third_party' / 'transcription_runtime' / 'ffmpeg' / 'bin' / 'ffmpeg.exe'}", content)
-        self.assertIn(f"SHARE_LINK_NODE_BIN={data_root / 'third_party' / 'browser_runtime' / 'node' / 'node.exe'}", content)
+        self.assertRegex(
+            content,
+            rf"FFMPEG_BIN=({re.escape(str(data_root / 'third_party' / 'transcription_runtime' / 'ffmpeg' / 'bin' / 'ffmpeg.exe'))}|ffmpeg)",
+        )
+        self.assertRegex(
+            content,
+            rf"SHARE_LINK_NODE_BIN=({re.escape(str(data_root / 'third_party' / 'browser_runtime' / 'node' / 'node.exe'))}|node)",
+        )
 
     def test_packaged_mode_keeps_user_env_overrides_and_backfills_missing_values(self) -> None:
         app_root = self.temp_dir / "bundle"

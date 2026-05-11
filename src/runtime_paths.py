@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -128,15 +129,69 @@ def ensure_runtime_env(env_path: Path | None = None) -> Path:
 
 
 def _merge_packaged_runtime_defaults(text: str, *, replace_existing: bool) -> str:
+    transcription_root = ("third_party", "transcription_runtime")
+    browser_root = ("third_party", "browser_runtime")
     defaults = {
         "OUTPUT_DIR": str(get_default_output_dir()),
-        "WHISPER_CPP_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe")),
-        "WHISPER_CPP_CPU_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "whisper.cpp", "build-core", "bin", "whisper-cli.exe")),
-        "WHISPER_CPP_MODEL_PATH": str(runtime_resource_path("models", "ggml-large-v3-turbo-q5_0.bin")),
-        "FFMPEG_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "ffmpeg", "bin", "ffmpeg.exe")),
-        "FFPROBE_BIN": str(runtime_resource_path("third_party", "transcription_runtime", "ffmpeg", "bin", "ffprobe.exe")),
-        "SHARE_LINK_NODE_BIN": str(runtime_resource_path("third_party", "browser_runtime", "node", "node.exe")),
-        "SHARE_LINK_NODE_PATH": str(runtime_resource_path("third_party", "browser_runtime", "node_runtime", "node_modules")),
+        "WHISPER_CPP_BIN": _first_existing_path_or_default(
+            (
+                user_data_path(*transcription_root, "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe"),
+                bundled_path(*transcription_root, "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe"),
+                bundled_path("third_party", "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe"),
+            ),
+            user_data_path(*transcription_root, "whisper.cpp", "build-cuda", "bin", "whisper-cli.exe"),
+        ),
+        "WHISPER_CPP_CPU_BIN": _first_existing_path_or_default(
+            (
+                user_data_path(*transcription_root, "whisper.cpp", "build-core", "bin", "whisper-cli.exe"),
+                bundled_path(*transcription_root, "whisper.cpp", "build-core", "bin", "whisper-cli.exe"),
+                bundled_path("third_party", "whisper.cpp", "build-core", "bin", "whisper-cli.exe"),
+            ),
+            user_data_path(*transcription_root, "whisper.cpp", "build-core", "bin", "whisper-cli.exe"),
+        ),
+        "WHISPER_CPP_MODEL_PATH": _first_existing_path_or_default(
+            (
+                user_data_path("models", "ggml-large-v3-turbo-q5_0.bin"),
+                bundled_path("models", "ggml-large-v3-turbo-q5_0.bin"),
+            ),
+            user_data_path("models", "ggml-large-v3-turbo-q5_0.bin"),
+        ),
+        "FFMPEG_BIN": _first_existing_path_or_command(
+            (
+                user_data_path(*transcription_root, "ffmpeg", "bin", "ffmpeg.exe"),
+                bundled_path(*transcription_root, "ffmpeg", "bin", "ffmpeg.exe"),
+                bundled_path("third_party", "ffmpeg", "bin", "ffmpeg.exe"),
+            ),
+            "ffmpeg",
+            user_data_path(*transcription_root, "ffmpeg", "bin", "ffmpeg.exe"),
+        ),
+        "FFPROBE_BIN": _first_existing_path_or_command(
+            (
+                user_data_path(*transcription_root, "ffmpeg", "bin", "ffprobe.exe"),
+                bundled_path(*transcription_root, "ffmpeg", "bin", "ffprobe.exe"),
+                bundled_path("third_party", "ffmpeg", "bin", "ffprobe.exe"),
+            ),
+            "ffprobe",
+            user_data_path(*transcription_root, "ffmpeg", "bin", "ffprobe.exe"),
+        ),
+        "SHARE_LINK_NODE_BIN": _first_existing_path_or_command(
+            (
+                user_data_path(*browser_root, "node", "node.exe"),
+                bundled_path(*browser_root, "node", "node.exe"),
+                bundled_path("third_party", "node", "node.exe"),
+            ),
+            "node",
+            user_data_path(*browser_root, "node", "node.exe"),
+        ),
+        "SHARE_LINK_NODE_PATH": _first_existing_path_or_default(
+            (
+                user_data_path(*browser_root, "node_runtime", "node_modules"),
+                bundled_path(*browser_root, "node_runtime", "node_modules"),
+                bundled_path("third_party", "node_runtime", "node_modules"),
+                bundled_path("third_party", "node", "node_modules"),
+            ),
+            user_data_path(*browser_root, "node_runtime", "node_modules"),
+        ),
     }
     merged = text
     for key, value in defaults.items():
@@ -151,6 +206,30 @@ def _merge_packaged_runtime_defaults(text: str, *, replace_existing: bool) -> st
             replace_invalid=is_packaged(),
         )
     return merged
+
+
+def _first_existing_path_or_default(candidates: tuple[Path, ...], default: Path) -> str:
+    for path in candidates:
+        if path.exists():
+            return str(path)
+    return str(default)
+
+
+def _first_existing_path_or_command(candidates: tuple[Path, ...], command: str, default: Path) -> str:
+    for path in candidates:
+        if path.exists():
+            return str(path)
+    resolved = shutil.which(command)
+    if resolved:
+        return command
+    return str(default)
+
+
+def _runtime_resource_or_command(parts: tuple[str, ...], command: str) -> str:
+    path = runtime_resource_path(*parts)
+    if path.exists():
+        return str(path)
+    return command
 
 
 def _replace_env_value(text: str, key: str, value: str) -> str:

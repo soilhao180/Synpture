@@ -59,6 +59,28 @@ class RuntimePathsPackagedLayoutTests(unittest.TestCase):
         self.assertIn("OUTPUT_DIR=C:/custom/output", content)
         self.assertIn(f"FFMPEG_BIN={ffmpeg_path}", content)
 
+    def test_packaged_env_uses_system_ffmpeg_when_runtime_resource_is_missing(self) -> None:
+        install_root = self.temp_dir / "install"
+        bundle_root = install_root / "_internal"
+        data_root = self.temp_dir / "data"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+        data_root.mkdir(parents=True, exist_ok=True)
+        env_path = data_root / ".env"
+        env_path.write_text("FFMPEG_BIN=C:/missing/ffmpeg.exe\nFFPROBE_BIN=C:/missing/ffprobe.exe\n", encoding="utf-8")
+
+        with (
+            patch("src.runtime_paths.is_packaged", return_value=True),
+            patch("src.runtime_paths.get_app_root", return_value=install_root),
+            patch("src.runtime_paths.get_bundle_root", return_value=bundle_root),
+            patch("src.runtime_paths.get_user_data_root", return_value=data_root),
+            patch("src.runtime_paths.shutil.which", side_effect=lambda command: f"C:/Windows/System32/{command}.exe"),
+        ):
+            runtime_paths.ensure_runtime_env(env_path)
+
+        content = env_path.read_text(encoding="utf-8")
+        self.assertIn("FFMPEG_BIN=ffmpeg", content)
+        self.assertIn("FFPROBE_BIN=ffprobe", content)
+
 
 if __name__ == "__main__":
     unittest.main()
