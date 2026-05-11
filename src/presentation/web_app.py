@@ -216,15 +216,18 @@ class WorkspaceBackend:
     def save_settings_payload(self, payload: SettingsSaveRequest) -> dict[str, Any]:
         existing_api_key = self.settings.summary_api_key or ""
         next_api_key = existing_api_key if payload.keepExistingApiKey and not payload.summaryApiKey.strip() else payload.summaryApiKey
-        save_env_settings(
-            self.env_path,
-            {
-                "SUMMARY_API_BASE_URL": payload.summaryApiBaseUrl,
-                "SUMMARY_API_KEY": next_api_key,
-                "SUMMARY_API_MODEL": payload.summaryApiModel,
-                "TRANSCRIBE_BACKEND": payload.transcribeBackend,
-            },
-        )
+        try:
+            save_env_settings(
+                self.env_path,
+                {
+                    "SUMMARY_API_BASE_URL": payload.summaryApiBaseUrl,
+                    "SUMMARY_API_KEY": next_api_key,
+                    "SUMMARY_API_MODEL": payload.summaryApiModel,
+                    "TRANSCRIBE_BACKEND": payload.transcribeBackend,
+                },
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         self.reload()
         return self.get_settings_payload()
 

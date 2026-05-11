@@ -11,12 +11,37 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.runtime_paths import bundled_path, get_user_data_root, user_data_path
+import src.runtime_paths as runtime_paths
+from src.runtime_paths import bundled_path, get_app_root, get_user_data_root, is_packaged, user_data_path
 
 
 MANIFEST_PATH = bundled_path("packaging", "runtime_resources.json")
 _DOWNLOAD_LOCK = threading.Lock()
 _DOWNLOADS: dict[str, dict[str, Any]] = {}
+
+_DEV_SOURCE_LAYOUTS: dict[str, tuple[Path, tuple[str, ...]]] = {
+    "model": (
+        Path("models") / "ggml-large-v3-turbo-q5_0.bin",
+        (),
+    ),
+    "browser_runtime": (
+        Path("third_party"),
+        (
+            "node/node.exe",
+            "node_runtime/node_modules/playwright/package.json",
+            "chromium/chrome.exe",
+        ),
+    ),
+    "transcription_runtime": (
+        Path("third_party"),
+        (
+            "ffmpeg/bin/ffmpeg.exe",
+            "ffmpeg/bin/ffprobe.exe",
+            "whisper.cpp/build-cuda/bin/whisper-cli.exe",
+            "whisper.cpp/build-core/bin/whisper-cli.exe",
+        ),
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -77,12 +102,13 @@ def serialize_runtime_resources() -> list[dict[str, Any]]:
 
 def serialize_runtime_resource(resource: RuntimeResource) -> dict[str, Any]:
     status = get_runtime_resource_status(resource.id)
+    target_path = status.pop("targetPath", resource.target_path)
     return {
         "id": resource.id,
         "title": resource.title,
         "description": resource.description,
         "requiredFor": list(resource.required_for),
-        "targetPath": str(resource.target_path),
+        "targetPath": str(target_path),
         "urlConfigured": bool(resource.url),
         "sha256Configured": bool(resource.sha256),
         **status,
@@ -94,8 +120,10 @@ def get_runtime_resource_status(resource_id: str) -> dict[str, Any]:
     with _DOWNLOAD_LOCK:
         download = dict(_DOWNLOADS.get(resource_id, {}))
 
-    ready = all(path.exists() for path in resource.ready_paths)
-    missing = [str(path) for path in resource.ready_paths if not path.exists()]
+    target_path = _effective_target_path(resource)
+    ready_paths = _effective_ready_paths(resource)
+    ready = all(path.exists() for path in ready_paths)
+    missing = [str(path) for path in ready_paths if not path.exists()]
     state = "ready" if ready else "missing"
     detail = "资源已安装。" if ready else "资源未安装。"
 
@@ -103,7 +131,7 @@ def get_runtime_resource_status(resource_id: str) -> dict[str, Any]:
         state = str(download.get("state") or state)
         detail = str(download.get("detail") or detail)
 
-    if ready and resource.sha256 and not resource.archive:
+    if ready and resource.sha256 and not resource.archive and target_path == resource.target_path:
         actual = _sha256_file(resource.target_path)
         if actual != resource.sha256:
             state = "invalid"
@@ -113,6 +141,7 @@ def get_runtime_resource_status(resource_id: str) -> dict[str, Any]:
         "state": state,
         "ready": ready and state != "invalid",
         "detail": detail,
+        "targetPath": str(target_path),
         "missing": missing,
         "progressPercent": int(download.get("progressPercent", 100 if ready else 0)),
         "error": download.get("error"),
@@ -213,6 +242,54 @@ def _download_file(url: str, destination: Path, resource_id: str) -> None:
             if total:
                 progress = max(5, min(80, int(received * 80 / total)))
                 _set_download_status(resource_id, "downloading", "正在下载资源。", progress)
+
+
+def _effective_target_path(resource: RuntimeResource) -> Path:
+    source_paths = _dev_source_ready_paths(resource)
+    if source_paths and all(path.exists() for path in source_paths):
+        source_root = _dev_source_target_path(resource)
+        if source_root is not None:
+            return source_root
+    return resource.target_path
+
+
+def _effective_ready_paths(resource: RuntimeResource) -> tuple[Path, ...]:
+    source_paths = _dev_source_ready_paths(resource)
+    if source_paths and all(path.exists() for path in source_paths):
+        return source_paths
+    return resource.ready_paths
+
+
+def _dev_source_target_path(resource: RuntimeResource) -> Path | None:
+    if not _allow_dev_source_layout():
+        return None
+    layout = _DEV_SOURCE_LAYOUTS.get(resource.id)
+    if not layout:
+        return None
+    target, _ = layout
+    return get_app_root() / target
+
+
+def _dev_source_ready_paths(resource: RuntimeResource) -> tuple[Path, ...]:
+    source_target = _dev_source_target_path(resource)
+    if source_target is None:
+        return ()
+    layout = _DEV_SOURCE_LAYOUTS.get(resource.id)
+    if not layout:
+        return ()
+    _, markers = layout
+    if markers:
+        return tuple(source_target / marker for marker in markers)
+    return (source_target,)
+
+
+def _allow_dev_source_layout() -> bool:
+    if is_packaged():
+        return False
+    try:
+        return runtime_paths.get_user_data_root().resolve() == get_app_root().resolve()
+    except OSError:
+        return False
 
 
 def _extract_archive(archive_path: Path, target_path: Path) -> None:

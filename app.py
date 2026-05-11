@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -19,7 +20,10 @@ def main() -> None:
     else:
         print(f"Synpture 工作台已启动：http://{host}:{port}/")
 
-    create_uvicorn_server(create_web_app(), host=host, port=port).run()
+    try:
+        create_uvicorn_server(create_web_app(), host=host, port=port).run()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
 
 
 app = create_web_app()

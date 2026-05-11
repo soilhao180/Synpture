@@ -120,6 +120,41 @@ class EnvWritebackTests(unittest.TestCase):
             _restore_env("SUMMARY_API_MODEL", original_model)
             os.environ.pop("TRANSCRIBE_BACKEND", None)
 
+    def test_save_env_settings_removes_orphan_api_key_lines(self) -> None:
+        temp_dir = Path("output") / "workspace_env_orphan_key"
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        env_path = temp_dir / ".env"
+        original_api_key = os.environ.get("SUMMARY_API_KEY")
+        try:
+            env_path.write_text(
+                "SUMMARY_API_KEY=\n"
+                "sk-orphanedKeyValueThatShouldNotStay\n"
+                "UNKNOWN_TEXT=keep-me\n",
+                encoding="utf-8",
+            )
+            save_env_settings(env_path, {"SUMMARY_API_KEY": "sk-new"})
+
+            content = env_path.read_text(encoding="utf-8")
+            self.assertIn("SUMMARY_API_KEY=sk-new", content)
+            self.assertIn("UNKNOWN_TEXT=keep-me", content)
+            self.assertNotIn("sk-orphanedKeyValueThatShouldNotStay", content)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            _restore_env("SUMMARY_API_KEY", original_api_key)
+
+    def test_save_env_settings_rejects_multiline_api_key(self) -> None:
+        temp_dir = Path("output") / "workspace_env_multiline_key"
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        env_path = temp_dir / ".env"
+        env_path.write_text("SUMMARY_API_KEY=\n", encoding="utf-8")
+        try:
+            with self.assertRaises(ValueError):
+                save_env_settings(env_path, {"SUMMARY_API_KEY": "sk-first\nsk-second"})
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_load_settings_reloads_latest_env_values(self) -> None:
         temp_dir = Path("output") / "workspace_env_reload"
         shutil.rmtree(temp_dir, ignore_errors=True)

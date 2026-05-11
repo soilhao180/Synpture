@@ -1813,7 +1813,11 @@ function bindEvents() {
 
   app.querySelectorAll("[data-setting]").forEach((input) => {
     input.addEventListener("input", (event) => {
-      state.settingsForm[input.dataset.setting] = event.target.value;
+      const value = normalizeSettingInput(input.dataset.setting, event.target.value);
+      if (value !== event.target.value) {
+        event.target.value = value;
+      }
+      state.settingsForm[input.dataset.setting] = value;
     });
   });
 
@@ -1890,9 +1894,21 @@ function bindEvents() {
 function syncSettingsFormFromDom() {
   app.querySelectorAll("[data-setting]").forEach((input) => {
     if (input.dataset.setting) {
-      state.settingsForm[input.dataset.setting] = input.value;
+      const value = normalizeSettingInput(input.dataset.setting, input.value);
+      if (value !== input.value) {
+        input.value = value;
+      }
+      state.settingsForm[input.dataset.setting] = value;
     }
   });
+}
+
+function normalizeSettingInput(setting, value) {
+  const text = String(value ?? "");
+  if (setting === "summaryApiKey") {
+    return text.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)[0] ?? "";
+  }
+  return text.replace(/[\r\n]+/g, " ").trim();
 }
 
 async function handleAction(action, dataset = {}) {

@@ -12,7 +12,8 @@ ENV_WRITEBACK_KEYS = (
     "TRANSCRIBE_BACKEND",
 )
 
-_ENV_ASSIGNMENT_RE = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*=\s*)(.*?)(\r?\n)?$")
+_ENV_ASSIGNMENT_RE = re.compile(r"^([^\S\r\n]*)([A-Za-z_][A-Za-z0-9_]*)([^\S\r\n]*=[^\S\r\n]*)([^\r\n]*)(\r?\n)?$")
+_ORPHAN_SECRET_RE = re.compile(r'^\s*"?sk-[A-Za-z0-9_\-]{16,}"?\s*$')
 
 
 def save_env_settings(env_path: str | Path, values: dict[str, str | None]) -> dict[str, str]:
@@ -26,6 +27,8 @@ def save_env_settings(env_path: str | Path, values: dict[str, str | None]) -> di
     for line in lines:
         match = _ENV_ASSIGNMENT_RE.match(line)
         if not match:
+            if _looks_like_orphan_secret(line):
+                continue
             output_lines.append(line)
             continue
 
@@ -62,8 +65,24 @@ def _normalize_values(values: dict[str, str | None]) -> dict[str, str]:
 
     normalized: dict[str, str] = {}
     for key, value in values.items():
-        normalized[key] = "" if value is None else str(value)
+        normalized[key] = _normalize_value(key, value)
     return normalized
+
+
+def _normalize_value(key: str, value: str | None) -> str:
+    if value is None:
+        return ""
+    normalized = str(value).strip()
+    if "\r" in normalized or "\n" in normalized:
+        raise ValueError(f"{key} cannot contain line breaks.")
+    return normalized
+
+
+def _looks_like_orphan_secret(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or "=" in stripped or stripped.startswith("#"):
+        return False
+    return bool(_ORPHAN_SECRET_RE.match(stripped))
 
 
 def _format_env_value(value: str) -> str:
