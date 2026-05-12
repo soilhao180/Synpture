@@ -19,6 +19,7 @@ from src.runtime_paths import (
     runtime_resource_path,
 )
 from src.runtime_resources import serialize_runtime_resources
+from src.runtime_resources import effective_runtime_resource_paths
 from src.transcription_runtime import probe_transcription_capability
 from src.utils import ensure_directory, hidden_subprocess_kwargs
 
@@ -101,9 +102,11 @@ def check_packaged_runtime_paths(settings: Settings) -> DiagnosticItem:
 
 
 def check_browser_runtime() -> DiagnosticItem:
+    resource_paths = effective_runtime_resource_paths()
     node_bin = os.getenv("SHARE_LINK_NODE_BIN")
     node_candidates = [
         Path(node_bin) if node_bin else None,
+        resource_paths.get("node"),
         runtime_resource_path("third_party", "browser_runtime", "node", "node.exe"),
         bundled_path("third_party", "node", "node.exe"),
         shutil.which("node"),
@@ -113,6 +116,7 @@ def check_browser_runtime() -> DiagnosticItem:
     node_path = os.getenv("SHARE_LINK_NODE_PATH")
     node_modules_candidates = [
         Path(node_path) if node_path else None,
+        resource_paths.get("node_modules"),
         runtime_resource_path("third_party", "browser_runtime", "node_runtime", "node_modules"),
         bundled_path("third_party", "node_runtime", "node_modules"),
         bundled_path("third_party", "node", "node_modules"),
@@ -122,6 +126,7 @@ def check_browser_runtime() -> DiagnosticItem:
     chrome_env = os.getenv("SHARE_LINK_CHROME_EXE")
     chrome_candidates = [
         Path(chrome_env) if chrome_env else None,
+        resource_paths.get("chromium"),
         runtime_resource_path("third_party", "browser_runtime", "chromium", "chrome.exe"),
         bundled_path("third_party", "chromium", "chrome.exe"),
         Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),

@@ -921,9 +921,118 @@ function findRuntimeResource(id) {
   return getRuntimeResources().find((item) => item.id === id) ?? null;
 }
 
+function getTranscriptionCapabilityLabel(capability) {
+  if (capability?.gpuStatus === "ready") {
+    return "GPU 可用";
+  }
+  if (capability?.cpuFallbackAvailable && capability?.allowCpuFallback) {
+    return "CPU 已启用";
+  }
+  if (capability?.cpuFallbackAvailable) {
+    return "需确认";
+  }
+  return "不可用";
+}
+
+function isTranscriptionCapabilityUsable(capability) {
+  return capability?.gpuStatus === "ready" || (capability?.cpuFallbackAvailable && capability?.allowCpuFallback);
+}
+
+function compactStatusText(value, maxLength = 86) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "";
+  }
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+function isRuntimeResourceHealthCheck(item) {
+  const text = [item?.label, item?.detail, item?.recommendation].filter(Boolean).join(" ");
+  const lowerText = text.toLowerCase();
+  return (
+    lowerText.includes("ffmpeg") ||
+    lowerText.includes("ffprobe") ||
+    lowerText.includes("whisper.cpp") ||
+    lowerText.includes("playwright") ||
+    lowerText.includes("chrome/chromium") ||
+    (lowerText.includes("node") && lowerText.includes("chrome")) ||
+    text.includes("运行资源") ||
+    text.includes("授权浏览器运行时") ||
+    text.includes("本地转录链路")
+  );
+}
+
+function getVisibleHealthChecks(health) {
+  return (health?.checks ?? []).filter((item) => !isRuntimeResourceHealthCheck(item));
+}
+
+function getHealthAttentionSummary(health, visibleChecks, transcription) {
+  if (!health?.hasRun) {
+    return "尚未运行自检。点击按钮后会检查 API、运行资源和本地环境。";
+  }
+  if (health.status === "ok") {
+    return "基础检查已通过，可以开始执行任务。";
+  }
+
+  const issues = [];
+  for (const resource of getRuntimeResources()) {
+    if (resource?.ready) {
+      continue;
+    }
+    const state = resource.state === "invalid" ? "校验失败" : "待安装";
+    issues.push(`${resource.title ?? resource.id}: ${state}`);
+  }
+
+  if (transcription && !isTranscriptionCapabilityUsable(transcription)) {
+    issues.push(`本地转录：${compactStatusText(transcription.gpuReason || transcription.cpuReason)}`);
+  }
+
+  for (const item of visibleChecks ?? []) {
+    if (item?.state === "ok") {
+      continue;
+    }
+    const label = item.label || "检查项";
+    const detail = compactStatusText(item.detail || item.recommendation || item.stateLabel, 68);
+    issues.push(detail ? `${label}: ${detail}` : label);
+  }
+
+  const uniqueIssues = [...new Set(issues.filter(Boolean))];
+  if (!uniqueIssues.length) {
+    return "需要关注的内容已在下方运行资源卡片中列出。";
+  }
+  const shown = uniqueIssues.slice(0, 3);
+  const rest = uniqueIssues.length - shown.length;
+  return `需要关注：${shown.join("；")}${rest > 0 ? `；另有 ${rest} 项` : ""}。`;
+}
+
+function getRuntimeResourceFileName(resource) {
+  const configuredName = String(resource?.fileName ?? "").trim();
+  if (configuredName) {
+    return configuredName;
+  }
+  const url = String(resource?.url ?? "").trim();
+  if (url) {
+    try {
+      const parsed = new URL(url, window.location.href);
+      const fileName = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "");
+      if (fileName) {
+        return fileName;
+      }
+    } catch {
+      const fileName = decodeURIComponent(url.split(/[/?#]/).filter(Boolean).pop() ?? "");
+      if (fileName) {
+        return fileName;
+      }
+    }
+  }
+  const target = String(resource?.targetPath ?? "").trim();
+  return target.split(/[\\/]/).filter(Boolean).pop() ?? "";
+}
+
 function renderResourcePrompt() {
   const resource = state.resourcePrompt;
   const busy = state.resourceBusyId === resource.id;
+  const fileName = getRuntimeResourceFileName(resource);
   return `
     <div class="blocking-overlay" aria-modal="true" role="dialog">
       <section class="blocking-card">
@@ -942,6 +1051,7 @@ function renderResourcePrompt() {
         </div>
         <div class="blocking-details">
           <p>安装位置：${escapeHtml(resource.targetPath ?? "")}</p>
+          ${fileName ? `<p>本地文件应选择：${escapeHtml(fileName)}</p>` : ""}
           ${resource.error ? `<p>${escapeHtml(resource.error)}</p>` : ""}
           ${resource.progressPercent ? `<p>进度：${escapeHtml(String(resource.progressPercent))}%</p>` : ""}
         </div>
@@ -1080,6 +1190,8 @@ function renderHealthDrawer() {
   const health = state.bootstrap?.health ?? { hasRun: false, status: "idle", statusText: "未运行", checks: [] };
   const transcription = state.bootstrap?.transcription ?? null;
   const dotTone = health.status === "ok" ? "is-ready" : health.status === "error" ? "is-error" : "is-idle";
+  const visibleHealthChecks = getVisibleHealthChecks(health);
+  const attentionSummary = getHealthAttentionSummary(health, visibleHealthChecks, transcription);
   return `
     <aside class="modal-drawer right-drawer open">
       <div class="drawer-head">
@@ -1101,6 +1213,7 @@ function renderHealthDrawer() {
           <span class="health-status-dot ${dotTone}" aria-hidden="true"></span>
           <strong>${escapeHtml(health.statusText ?? "未运行")}</strong>
         </div>
+        <p class="health-status-summary">${escapeHtml(attentionSummary)}</p>
         <button class="drawer-primary${getButtonBusyClass("run-health-check")}" data-action="run-health-check" ${isActionDisabled("run-health-check") ? "disabled" : ""}>${escapeHtml(getSettingsActionLabel("run-health-check", "自检启动", "自检中..."))}</button>
       </section>
       ${health.hasRun && transcription ? `
@@ -1111,7 +1224,7 @@ function renderHealthDrawer() {
           <div class="health-item">
             <div class="health-item-head">
               <strong>本地转录</strong>
-              <span class="drawer-pill ${transcription.gpuStatus === "ready" ? "is-accent" : ""}">${escapeHtml(transcription.gpuStatus === "ready" ? "GPU 可用" : transcription.cpuFallbackAvailable ? "CPU 兼容" : "不可用")}</span>
+              <span class="drawer-pill ${isTranscriptionCapabilityUsable(transcription) ? "is-accent" : ""}">${escapeHtml(getTranscriptionCapabilityLabel(transcription))}</span>
             </div>
             <p>${escapeHtml(transcription.gpuReason ?? "")}</p>
             ${transcription.cpuReason ? `<p>${escapeHtml(transcription.cpuReason)}</p>` : ""}
@@ -1119,13 +1232,13 @@ function renderHealthDrawer() {
         </section>
       ` : ""}
       ${health.hasRun ? renderRuntimeResourcesCard() : ""}
-      ${health.hasRun ? `
+      ${health.hasRun && visibleHealthChecks.length ? `
         <section class="drawer-card">
           <div class="drawer-card-head">
             <h3>健康项列表</h3>
           </div>
           <div class="health-list">
-            ${(health.checks ?? []).map((item) => `
+            ${visibleHealthChecks.map((item) => `
               <div class="health-item">
                 <div class="health-item-head">
                   <strong>${escapeHtml(item.label ?? "")}</strong>
@@ -1323,20 +1436,24 @@ function renderRuntimeResourcesCard() {
         <h3>运行资源</h3>
       </div>
       <div class="runtime-resource-list">
-        ${resources.map((item) => `
+        ${resources.map((item) => {
+          const fileName = getRuntimeResourceFileName(item);
+          return `
           <div class="runtime-resource-item">
             <div class="runtime-resource-head">
               <strong>${escapeHtml(item.title ?? item.id)}</strong>
               <span class="runtime-resource-state ${item.ready ? "is-ready" : ""}">${escapeHtml(item.ready ? "可用" : item.state ?? "缺失")}</span>
             </div>
             <p class="runtime-resource-copy">${escapeHtml(item.detail ?? item.description ?? "")}</p>
+            ${fileName ? `<p class="runtime-resource-file-hint"><span>本地文件</span>${escapeHtml(fileName)}</p>` : ""}
             <div class="runtime-resource-actions">
               <button class="drawer-chip" data-action="download-runtime-resource" data-resource-id="${escapeAttribute(item.id)}" ${item.ready || !item.urlConfigured || !item.sha256Configured || state.resourceBusyId === item.id ? "disabled" : ""}>${state.resourceBusyId === item.id ? "处理中..." : "下载"}</button>
               <button class="drawer-chip" data-action="select-runtime-resource-file" data-resource-id="${escapeAttribute(item.id)}" ${state.resourceBusyId === item.id ? "disabled" : ""}>选择本地文件</button>
               <button class="drawer-chip" data-action="retry-runtime-resource" data-resource-id="${escapeAttribute(item.id)}" ${state.resourceBusyId === item.id ? "disabled" : ""}>刷新</button>
             </div>
           </div>
-        `).join("")}
+        `;
+        }).join("")}
       </div>
     </section>
   `;
@@ -1362,7 +1479,7 @@ function renderShareLinkView() {
           </div>
           ${browserRuntime ? `
             <div class="share-link-browser-note ${browserRuntime.ok ? "is-ok" : "is-warn"}">
-              <strong>${browserRuntime.ok ? "授权浏览器可用" : "授权浏览器不可用"}</strong>
+              <strong>${browserRuntime.ok ? "浏览器运行时可用" : "浏览器运行时不可用"}</strong>
               <p>${escapeHtml(browserRuntime.detail ?? "")}${browserRuntime.recommendation ? ` ${escapeHtml(browserRuntime.recommendation)}` : ""}</p>
             </div>
           ` : ""}
@@ -2154,7 +2271,7 @@ async function runHealthCheck() {
   safeRenderApp();
   try {
     const payload = await fetchJson("/api/health/run", { method: "POST" });
-    state.bootstrap.health = payload;
+    applyRuntimeStatusPayload(payload);
     showToast("健康自检已完成。");
   } catch (error) {
     showToast(error.message, "error");
@@ -2162,6 +2279,24 @@ async function runHealthCheck() {
     state.settingsBusyAction = null;
   }
   safeRenderApp();
+}
+
+function applyRuntimeStatusPayload(payload) {
+  if (!state.bootstrap || !payload) {
+    return;
+  }
+  if (payload.health) {
+    state.bootstrap.health = payload.health;
+  }
+  if (payload.browserRuntime) {
+    state.bootstrap.browserRuntime = payload.browserRuntime;
+  }
+  if (payload.transcription) {
+    state.bootstrap.transcription = payload.transcription;
+  }
+  if (payload.runtimeResources) {
+    state.bootstrap.runtimeResources = payload.runtimeResources;
+  }
 }
 
 async function saveSettings() {

@@ -20,6 +20,16 @@ class RuntimeResourceTests(unittest.TestCase):
             {
               "resources": [
                 {
+                  "id": "model",
+                  "title": "Model",
+                  "description": "model",
+                  "url": "",
+                  "sha256": "",
+                  "archive": false,
+                  "target": "models/ggml-large-v3-turbo-q5_0.bin",
+                  "requiredFor": ["transcription"]
+                },
+                {
                   "id": "browser_runtime",
                   "title": "Browser Runtime",
                   "description": "browser",
@@ -81,7 +91,10 @@ class RuntimeResourceTests(unittest.TestCase):
             patch.object(runtime_paths, "get_user_data_root", return_value=user_data_root),
         ):
             resources = {item["id"]: item for item in runtime_resources.serialize_runtime_resources()}
+            paths = runtime_resources.effective_runtime_resource_paths()
 
+        self.assertEqual(paths["model"], app_root / "models" / "ggml-large-v3-turbo-q5_0.bin")
+        self.assertEqual(resources["model"]["fileName"], "ggml-large-v3-turbo-q5_0.bin")
         self.assertTrue(resources["browser_runtime"]["ready"])
         self.assertEqual(resources["browser_runtime"]["targetPath"], str(app_root / "third_party"))
         self.assertTrue(resources["transcription_runtime"]["ready"])
@@ -103,9 +116,11 @@ class RuntimeResourceTests(unittest.TestCase):
             patch.object(runtime_paths, "get_user_data_root", return_value=user_data_root),
         ):
             status = runtime_resources.get_runtime_resource_status("transcription_runtime")
+            paths = runtime_resources.effective_runtime_resource_paths()
 
         self.assertFalse(status["ready"])
         self.assertEqual(status["targetPath"], str(user_data_root / "third_party" / "transcription_runtime"))
+        self.assertEqual(paths["model"], user_data_root / "models" / "ggml-large-v3-turbo-q5_0.bin")
 
 
 if __name__ == "__main__":

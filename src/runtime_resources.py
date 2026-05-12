@@ -10,6 +10,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 import src.runtime_paths as runtime_paths
 from src.runtime_paths import bundled_path, get_app_root, get_user_data_root, is_packaged, user_data_path
@@ -109,6 +110,7 @@ def serialize_runtime_resource(resource: RuntimeResource) -> dict[str, Any]:
         "description": resource.description,
         "requiredFor": list(resource.required_for),
         "targetPath": str(target_path),
+        "fileName": _resource_file_name(resource),
         "urlConfigured": bool(resource.url),
         "sha256Configured": bool(resource.sha256),
         **status,
@@ -200,6 +202,49 @@ def runtime_resource_paths() -> dict[str, Path]:
         "node_modules": data_root / "third_party" / "browser_runtime" / "node_runtime" / "node_modules",
         "chromium": data_root / "third_party" / "browser_runtime" / "chromium" / "chrome.exe",
     }
+
+
+def effective_runtime_resource_paths() -> dict[str, Path]:
+    resources = {resource.id: resource for resource in load_runtime_resources()}
+    paths = runtime_resource_paths()
+
+    model_resource = resources.get("model")
+    if model_resource:
+        paths["model"] = _effective_target_path(model_resource)
+
+    transcription_resource = resources.get("transcription_runtime")
+    if transcription_resource:
+        transcription_root = _effective_target_path(transcription_resource)
+        paths.update(
+            {
+                "ffmpeg": transcription_root / "ffmpeg" / "bin" / "ffmpeg.exe",
+                "ffprobe": transcription_root / "ffmpeg" / "bin" / "ffprobe.exe",
+                "whisper_gpu": transcription_root / "whisper.cpp" / "build-cuda" / "bin" / "whisper-cli.exe",
+                "whisper_cpu": transcription_root / "whisper.cpp" / "build-core" / "bin" / "whisper-cli.exe",
+            }
+        )
+
+    browser_resource = resources.get("browser_runtime")
+    if browser_resource:
+        browser_root = _effective_target_path(browser_resource)
+        paths.update(
+            {
+                "node": browser_root / "node" / "node.exe",
+                "node_modules": browser_root / "node_runtime" / "node_modules",
+                "chromium": browser_root / "chromium" / "chrome.exe",
+            }
+        )
+
+    return paths
+
+
+def _resource_file_name(resource: RuntimeResource) -> str:
+    if resource.url:
+        parsed = urlparse(resource.url)
+        name = unquote(Path(parsed.path).name)
+        if name:
+            return name
+    return Path(resource.target).name
 
 
 def _download_resource_worker(resource: RuntimeResource) -> None:

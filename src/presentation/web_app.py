@@ -167,6 +167,14 @@ class WorkspaceBackend:
     def get_runtime_resources_payload(self) -> dict[str, Any]:
         return {"resources": serialize_runtime_resources()}
 
+    def get_runtime_status_payload(self) -> dict[str, Any]:
+        return {
+            "health": self.get_health_payload(),
+            "browserRuntime": serialize_diagnostic_item(check_browser_runtime()),
+            "transcription": self.get_transcription_capability_payload(),
+            "runtimeResources": self.get_runtime_resources_payload(),
+        }
+
     def get_runtime_resource_status_payload(self, resource_id: str) -> dict[str, Any]:
         try:
             return get_runtime_resource_status(resource_id)
@@ -265,7 +273,7 @@ class WorkspaceBackend:
 
     def run_health_check(self) -> dict[str, Any]:
         self.health_items = run_startup_checks(self.settings)
-        return self.get_health_payload()
+        return self.get_runtime_status_payload()
 
     def get_platform_statuses(self) -> list[dict[str, Any]]:
         return [
@@ -688,6 +696,10 @@ def create_web_app(
     @app.post("/api/health/run")
     def run_health() -> dict[str, Any]:
         return backend.run_health_check()
+
+    @app.get("/api/runtime/status")
+    def get_runtime_status() -> dict[str, Any]:
+        return backend.get_runtime_status_payload()
 
     @app.get("/api/settings")
     def get_settings() -> dict[str, Any]:

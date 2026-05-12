@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from src.config import Settings
 from src.runtime_paths import get_runtime_state_path, get_windows_debug_crt_dependencies
+from src.runtime_resources import effective_runtime_resource_paths
 from src.utils import ensure_directory, hidden_subprocess_kwargs, timestamp_now
 
 
@@ -60,10 +61,13 @@ def save_transcription_runtime_state(*, allow_cpu_fallback: bool) -> Transcripti
 
 def probe_transcription_capability(settings: Settings) -> TranscriptionCapability:
     state = load_transcription_runtime_state()
-    gpu_binary = _resolve_binary_path(settings.whisper_cpp_bin)
-    cpu_binary = _resolve_binary_path(settings.whisper_cpp_cpu_bin) or gpu_binary
-    model_ready = settings.whisper_cpp_model_path.exists()
-    ffmpeg_ready = bool(_resolve_binary_path(settings.ffmpeg_bin))
+    resource_paths = effective_runtime_resource_paths()
+    gpu_binary = _resolve_binary_path(resource_paths.get("whisper_gpu")) or _resolve_binary_path(settings.whisper_cpp_bin)
+    cpu_binary = _resolve_binary_path(resource_paths.get("whisper_cpu")) or _resolve_binary_path(settings.whisper_cpp_cpu_bin) or gpu_binary
+    model_path = resource_paths.get("model") or settings.whisper_cpp_model_path
+    model_ready = model_path.exists()
+    ffmpeg_binary = _resolve_binary_path(resource_paths.get("ffmpeg")) or _resolve_binary_path(settings.ffmpeg_bin)
+    ffmpeg_ready = bool(ffmpeg_binary)
 
     nvidia_detected, nvidia_names = _detect_nvidia_hardware()
     gpu_details: list[str] = []
@@ -92,7 +96,7 @@ def probe_transcription_capability(settings: Settings) -> TranscriptionCapabilit
 
     if not model_ready:
         gpu_status = "recoverable" if nvidia_detected else "unavailable"
-        gpu_reason = f"未找到 whisper.cpp 模型文件：{settings.whisper_cpp_model_path}"
+        gpu_reason = f"未找到 whisper.cpp 模型文件：{model_path}"
     if not ffmpeg_ready:
         gpu_status = "recoverable" if nvidia_detected else "unavailable"
         gpu_reason = "未找到 ffmpeg，可执行本地转录前缺少音频提取能力。"

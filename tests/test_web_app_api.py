@@ -127,8 +127,15 @@ class WebAppApiTests(unittest.TestCase):
 
         health_run = client.post("/api/health/run")
         self.assertEqual(health_run.status_code, 200)
-        self.assertTrue(health_run.json()["hasRun"])
-        self.assertIn("checks", health_run.json())
+        self.assertTrue(health_run.json()["health"]["hasRun"])
+        self.assertIn("checks", health_run.json()["health"])
+        self.assertIn("browserRuntime", health_run.json())
+        self.assertIn("transcription", health_run.json())
+        self.assertIn("runtimeResources", health_run.json())
+
+        runtime_status = client.get("/api/runtime/status")
+        self.assertEqual(runtime_status.status_code, 200)
+        self.assertTrue(runtime_status.json()["health"]["hasRun"])
 
     def test_settings_actions_do_not_500_when_api_key_missing(self) -> None:
         original_summary_api_key = os.environ.get("SUMMARY_API_KEY")
