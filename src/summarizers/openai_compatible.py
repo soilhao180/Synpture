@@ -261,12 +261,12 @@ JSON 格式：
   "high_value_points": {json.dumps(first_pass.high_value_points, ensure_ascii=False)},
   "objective_context": {json.dumps(first_pass.objective_context, ensure_ascii=False)},
   "low_value_segments": {json.dumps([
-      {{
+      {
           "start": item.start,
           "end": item.end,
           "reason": item.reason,
           "excerpt": item.excerpt,
-      }}
+      }
       for item in first_pass.low_value_segments
   ], ensure_ascii=False)}
 }}

@@ -39,6 +39,7 @@ from src.models import (
 )
 from src.progress import build_status, build_summary_input_preview
 from src.result_writers import render_first_pass_markdown, render_template_markdown
+from src.summarizers.openai_compatible import OpenAICompatibleSummarizer
 from src.segmenter import build_chunks
 from src.source_ingest import (
     acquire_text_file,
@@ -724,6 +725,51 @@ class ProgressTests(unittest.TestCase):
         )
         preview = build_summary_input_preview(transcript_bundle)
         self.assertIn("preview text for summary model", preview)
+
+
+class OpenAICompatibleSummarizerTests(unittest.TestCase):
+    def test_template_prompt_serializes_low_value_segments(self) -> None:
+        captured: dict[str, str] = {}
+        summarizer = OpenAICompatibleSummarizer(api_key="test-key", model="test-model", client=object())
+
+        def fake_complete_json(prompt: str) -> dict:
+            captured["prompt"] = prompt
+            return {
+                "overview": "overview",
+                "key_points": ["point"],
+                "section_summaries": [
+                    {"title": "section", "summary": "summary", "bullets": ["bullet"]},
+                ],
+                "template_fields": {"原文依据": ["excerpt"]},
+            }
+
+        summarizer._complete_json = fake_complete_json  # type: ignore[method-assign]
+        first_pass = FirstPassResult(
+            provider="test",
+            model="test-model",
+            cleaned_transcript="cleaned",
+            one_line_verdict="worth reading",
+            headline_verdict="headline",
+            value_rating="high",
+            value_reason="dense",
+            high_value_points=["point"],
+            objective_context=["context"],
+            low_value_segments=[LowValueSegment(start=1.0, end=2.0, reason="noise", excerpt="um")],
+            raw_transcript_reference="raw",
+        )
+        template = TemplateDefinition(
+            id="expert-review",
+            name="专业点评",
+            description="review",
+            input_fields=[],
+            output_fields=[],
+            prompt_instructions="separate evidence and judgement",
+        )
+
+        result = summarizer.run_template_pass(first_pass, template)
+
+        self.assertEqual(result.template_id, "expert-review")
+        self.assertIn('"low_value_segments": [{"start": 1.0, "end": 2.0, "reason": "noise", "excerpt": "um"}]', captured["prompt"])
 
 
 if __name__ == "__main__":
