@@ -121,6 +121,8 @@ const state = {
   activeTemplateId: null,
   templatePanelTab: "catalog",
   selectedTemplateRecordId: null,
+  customSkillDialog: null,
+  customSkillBusy: false,
   themePreference: loadThemePreference(),
   taskPollTimer: null,
   toast: null,
@@ -308,7 +310,7 @@ function getTemplateStatusLabel(option, runState) {
   if (option.completed) {
     return option.statusLabel ?? "已生成";
   }
-  return option.statusLabel ?? "绛夊緟";
+  return option.statusLabel ?? "等待";
 }
 
 function mapValueRating(value) {
@@ -557,6 +559,7 @@ function renderApp() {
     <div class="app-shell ${state.workspaceIntro ? "is-entering" : ""}">
       ${renderTopNav()}
       ${renderGlobalFeedback()}
+      ${renderCustomSkillDialog()}
       <input id="runtime-resource-file-input" class="hidden-file-input" type="file" />
       <div class="workspace-stage ${state.selectedHistoryRunId ? "is-history-focus" : ""}">
         <div class="workspace-rail workspace-rail--left ${state.leftDrawerOpen ? "is-open" : "is-closed"}">
@@ -1761,9 +1764,12 @@ function renderSkillSection(result) {
   const activeTab = cards.length ? state.templatePanelTab : "catalog";
   return `
     <section class="result-cluster">
-      <div class="result-section-head">
-        <div class="result-section-kicker">二次深化</div>
-        <h3>模板深化</h3>
+      <div class="result-section-head template-section-head">
+        <div>
+          <div class="result-section-kicker">二次深化</div>
+          <h3>模板深化</h3>
+        </div>
+        ${activeTab === "catalog" ? `<button class="drawer-chip drawer-chip--accent" data-action="open-custom-skill-dialog">新增</button>` : ""}
       </div>
       <div class="section-tabs template-tabs">
         <button class="section-tab ${activeTab === "catalog" ? "is-active" : ""}" data-action="set-template-tab" data-template-tab="catalog">模板列表</button>
@@ -1793,14 +1799,16 @@ function renderSkillSection(result) {
           ${options.map((item) => {
             const runState = getTemplateRunState(item.id);
             const generatedRecord = cards.find((record) => record.id === item.id) ?? null;
+            const sourceClass = item.editable ? "is-custom" : "is-system";
             return `
-              <article class="mini-panel template-action-card ${item.completed ? "is-complete" : "is-waiting"} ${runState ? "is-running" : ""}">
+              <article class="mini-panel template-action-card ${item.completed ? "is-complete" : "is-waiting"} ${runState ? "is-running" : ""} ${sourceClass}">
                 <div class="mini-panel-head">
                   <h3>${escapeHtml(item.name)}</h3>
-                  <span class="template-state-chip ${item.completed ? "is-complete" : "is-waiting"}">${escapeHtml(getTemplateStatusLabel(item, runState))}</span>
+                  <span class="template-state-chip ${item.completed ? "is-complete" : item.editable ? "is-custom" : "is-waiting"}">${escapeHtml(getTemplateStatusLabel(item, runState))}</span>
                 </div>
                 <div class="template-action-copy">
                   ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
+                  <div class="template-source-line">${escapeHtml(item.editable ? "自定义 skill" : "系统级 skill")}</div>
                   ${runState ? `<div class="template-task-inline"><div class="template-task-bar"><span style="width:${runState.percent}%"></span></div><strong>${escapeHtml(runState.label)}</strong></div>` : ""}
                 </div>
                 <div class="template-card-actions">
@@ -1814,15 +1822,64 @@ function renderSkillSection(result) {
                         <button class="drawer-chip drawer-chip--accent" data-action="run-template" data-template-id="${escapeHtml(item.id)}" ${isActionDisabled("run-template") ? "disabled" : ""}>开始生成</button>
                       `
                   }
+                  ${item.editable ? `<button class="drawer-chip" data-action="edit-custom-skill" data-template-id="${escapeHtml(item.id)}" ${isTaskRunning() ? "disabled" : ""}>修改</button>` : ""}
                 </div>
                 ${generatedRecord ? `<div class="template-record-hint">已生成记录可在“生成记录”里反复查看。</div>` : ""}
               </article>
             `;
           }).join("")}
+          <button class="mini-panel template-action-card template-add-card" data-action="open-custom-skill-dialog" ${isTaskRunning() ? "disabled" : ""}>
+            <div class="template-add-mark">+</div>
+            <div class="template-action-copy">
+              <h3>新增自定义 Skill</h3>
+              <p>用 Markdown 写入你的二次加工模板。</p>
+            </div>
+          </button>
         </div>
-      ` : `<div class="empty-copy">当前没有检测到可用模板。</div>`}
+      ` : `<div class="template-action-grid"><button class="mini-panel template-action-card template-add-card" data-action="open-custom-skill-dialog"><div class="template-add-mark">+</div><div class="template-action-copy"><h3>新增自定义 Skill</h3><p>用 Markdown 写入你的二次加工模板。</p></div></button></div>`}
       ${activeTab === "catalog" && !cards.length ? `<div class="empty-copy">当前还没有模板结果，先从上面选择一个模板开始。</div>` : ""}
     </section>
+  `;
+}
+
+function renderCustomSkillDialog() {
+  const dialog = state.customSkillDialog;
+  if (!dialog) {
+    return "";
+  }
+  const title = dialog.mode === "edit" ? "修改自定义 Skill" : "新增自定义 Skill";
+  return `
+    <div class="blocking-overlay custom-skill-overlay" aria-modal="true" role="dialog">
+      <section class="blocking-card custom-skill-dialog">
+        <div class="drawer-head custom-skill-dialog-head">
+          <div class="drawer-head-copy">
+            <div class="drawer-eyebrow">Skill</div>
+            <div class="panel-title">${escapeHtml(title)}</div>
+          </div>
+          <button class="drawer-icon-button" data-action="close-custom-skill-dialog" aria-label="关闭" title="关闭" ${state.customSkillBusy ? "disabled" : ""}>
+            <span class="icon-mask icon-mask--close" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="single-column-form custom-skill-form">
+          <label class="field-stack">
+            <span class="field-label">名称</span>
+            <input class="line-input" data-custom-skill-field="name" maxlength="24" value="${escapeAttribute(dialog.name ?? "")}" placeholder="最多 24 个字" ${state.customSkillBusy ? "disabled" : ""} />
+          </label>
+          <label class="field-stack">
+            <span class="field-label">简介</span>
+            <input class="line-input" data-custom-skill-field="description" maxlength="72" value="${escapeAttribute(dialog.description ?? "")}" placeholder="最多 72 个字，显示在卡片上" ${state.customSkillBusy ? "disabled" : ""} />
+          </label>
+          <label class="field-stack">
+            <span class="field-label">Markdown 提示词</span>
+            <textarea class="text-area-input custom-skill-prompt" data-custom-skill-field="promptInstructions" rows="12" placeholder="使用 Markdown 写入这个 skill 的二次加工规则，例如：&#10;# 目标&#10;- 输出适合朋友圈发布的短文&#10;# 要求&#10;- 保留原文事实&#10;- 不要编造案例" ${state.customSkillBusy ? "disabled" : ""}>${escapeHtml(dialog.promptInstructions ?? "")}</textarea>
+          </label>
+        </div>
+        <div class="custom-skill-dialog-actions">
+          <button class="drawer-chip" data-action="close-custom-skill-dialog" ${state.customSkillBusy ? "disabled" : ""}>取消</button>
+          <button class="drawer-primary${state.customSkillBusy ? " is-busy" : ""}" data-action="save-custom-skill" ${state.customSkillBusy ? "disabled" : ""}>确定</button>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -1935,6 +1992,15 @@ function bindEvents() {
         event.target.value = value;
       }
       state.settingsForm[input.dataset.setting] = value;
+    });
+  });
+
+  app.querySelectorAll("[data-custom-skill-field]").forEach((input) => {
+    input.addEventListener("input", (event) => {
+      if (!state.customSkillDialog) {
+        return;
+      }
+      state.customSkillDialog[input.dataset.customSkillField] = event.target.value;
     });
   });
 
@@ -2173,6 +2239,20 @@ async function handleAction(action, dataset = {}) {
           await runTemplateAction(dataset.templateId);
         }
         return;
+      case "open-custom-skill-dialog":
+        openCustomSkillDialog();
+        return;
+      case "edit-custom-skill":
+        if (dataset.templateId) {
+          openCustomSkillDialog(dataset.templateId);
+        }
+        return;
+      case "close-custom-skill-dialog":
+        closeCustomSkillDialog();
+        return;
+      case "save-custom-skill":
+        await saveCustomSkill();
+        return;
       case "view-template-record":
         if (dataset.templateId) {
           state.templatePanelTab = "records";
@@ -2325,6 +2405,83 @@ function buildSettingsRequestPayload() {
     ...state.settingsForm,
     keepExistingApiKey: !state.settingsForm.summaryApiKey?.trim(),
   };
+}
+
+function syncCustomSkillFormFromDom() {
+  if (!state.customSkillDialog) {
+    return;
+  }
+  app.querySelectorAll("[data-custom-skill-field]").forEach((input) => {
+    state.customSkillDialog[input.dataset.customSkillField] = input.value;
+  });
+}
+
+function openCustomSkillDialog(templateId = null) {
+  const option = templateId ? findSkillOption(templateId) : null;
+  if (option && !option.editable) {
+    showToast("系统级 skill 不支持修改。", "error");
+    return;
+  }
+  state.customSkillDialog = {
+    mode: option ? "edit" : "create",
+    templateId: option?.id ?? null,
+    name: option?.name ?? "",
+    description: option?.description ?? "",
+    promptInstructions: option?.promptInstructions ?? "",
+  };
+  safeRenderApp();
+}
+
+function closeCustomSkillDialog() {
+  if (state.customSkillBusy) {
+    return;
+  }
+  state.customSkillDialog = null;
+  safeRenderApp();
+}
+
+function findSkillOption(templateId) {
+  const run = getSelectedRun();
+  const result = run ? state.runPayloads[run.id] : null;
+  return (result?.skillOptions ?? state.bootstrap?.templates ?? []).find((item) => item.id === templateId) ?? null;
+}
+
+async function saveCustomSkill() {
+  if (!state.customSkillDialog) {
+    return;
+  }
+  syncCustomSkillFormFromDom();
+  const dialog = state.customSkillDialog;
+  const payload = {
+    name: String(dialog.name ?? "").trim(),
+    description: String(dialog.description ?? "").trim(),
+    promptInstructions: String(dialog.promptInstructions ?? "").trim(),
+  };
+  if (!payload.name || !payload.description || !payload.promptInstructions) {
+    showToast("名称、简介和 Markdown 提示词都不能为空。", "error");
+    return;
+  }
+  state.customSkillBusy = true;
+  safeRenderApp();
+  try {
+    const isEdit = dialog.mode === "edit" && dialog.templateId;
+    await fetchJson(isEdit ? `/api/templates/custom/${encodeURIComponent(dialog.templateId)}` : "/api/templates/custom", {
+      method: isEdit ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    state.customSkillDialog = null;
+    showToast(isEdit ? "自定义 skill 已保存为新版本。" : "自定义 skill 已新增。");
+    await refreshBootstrap({ preserveSelection: true });
+    if (state.selectedHistoryRunId) {
+      await openProject(state.selectedHistoryRunId);
+    }
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    state.customSkillBusy = false;
+    safeRenderApp();
+  }
 }
 
 async function runSettingsAction(action, url, options = {}) {

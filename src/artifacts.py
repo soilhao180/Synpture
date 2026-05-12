@@ -184,6 +184,8 @@ def serialize_template_result(template_result: TemplateResult) -> dict:
         ],
         "template_fields": template_result.template_fields,
         "warning": template_result.warning,
+        "template_source": template_result.template_source,
+        "template_version": template_result.template_version,
     }
 
 
@@ -244,6 +246,8 @@ def load_template_result(path: Path) -> TemplateResult:
         ],
         template_fields=dict(payload.get("template_fields", {})),
         warning=str(payload.get("warning")) if payload.get("warning") is not None else None,
+        template_source=str(payload.get("template_source", payload.get("source", "system"))),
+        template_version=str(payload.get("template_version")) if payload.get("template_version") is not None else None,
     )
 
 

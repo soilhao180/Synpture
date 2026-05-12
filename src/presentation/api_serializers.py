@@ -217,6 +217,10 @@ def serialize_template_catalog(
             "description": template.description,
             "completed": template.id in completed,
             "statusLabel": "已生成" if template.id in completed else "等待",
+            "source": getattr(template, "source", "system"),
+            "editable": bool(getattr(template, "editable", False)),
+            "version": getattr(template, "version", None),
+            "promptInstructions": getattr(template, "prompt_instructions", ""),
         }
         for template in template_definitions
     ]
@@ -318,6 +322,8 @@ def serialize_template_results(template_results: dict[str, TemplateResult]) -> l
                     for item in result.section_summaries[:4]
                 ],
                 "fields": {key: value for key, value in list(result.template_fields.items())[:6]},
+                "source": result.template_source,
+                "version": result.template_version,
             }
         )
     return cards

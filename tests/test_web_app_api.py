@@ -137,6 +137,48 @@ class WebAppApiTests(unittest.TestCase):
         self.assertEqual(runtime_status.status_code, 200)
         self.assertTrue(runtime_status.json()["health"]["hasRun"])
 
+    def test_custom_template_routes_create_and_edit_versions(self) -> None:
+        skills_root = self.output_root / "skills"
+        with (
+            patch.object(web_app, "ENV_PATH", self.env_path),
+            patch("src.template_registry.get_custom_skills_root", return_value=skills_root),
+        ):
+            client = TestClient(web_app.create_web_app())
+
+            created = client.post(
+                "/api/templates/custom",
+                json={
+                    "name": "短视频改写",
+                    "description": "改写成短视频脚本",
+                    "promptInstructions": "# 目标\n- 改写成短视频脚本",
+                },
+            )
+            self.assertEqual(created.status_code, 200)
+            created_payload = created.json()
+            self.assertEqual(created_payload["source"], "custom")
+            self.assertTrue(created_payload["editable"])
+
+            blocked = client.put(
+                "/api/templates/custom/expert-review",
+                json={
+                    "name": "专业点评新版",
+                    "description": "系统模板不允许改",
+                    "promptInstructions": "# no",
+                },
+            )
+            self.assertEqual(blocked.status_code, 400)
+
+            updated = client.put(
+                f"/api/templates/custom/{created_payload['id']}",
+                json={
+                    "name": "短视频改写新版",
+                    "description": "改写成新版脚本",
+                    "promptInstructions": "# 目标\n- 改写成新版短视频脚本",
+                },
+            )
+            self.assertEqual(updated.status_code, 200)
+            self.assertNotEqual(updated.json()["id"], created_payload["id"])
+
     def test_settings_actions_do_not_500_when_api_key_missing(self) -> None:
         original_summary_api_key = os.environ.get("SUMMARY_API_KEY")
         os.environ.pop("SUMMARY_API_KEY", None)

@@ -7,18 +7,52 @@ from pathlib import Path
 from app import find_resume_candidate, find_resume_candidate_for_run_dir
 from src.artifacts import load_first_pass, load_template_result, serialize_first_pass, serialize_template_result
 from src.models import FirstPassResult, LowValueSegment, TemplateResult, TemplateSection
-from src.template_registry import list_template_definitions
+from src.template_registry import create_custom_template_definition, list_template_definitions, load_template_definition, update_custom_template_definition
 from src.utils import write_json
 
 
 class TemplateRegistryTests(unittest.TestCase):
     def test_runtime_templates_are_discoverable(self) -> None:
-        definitions = list_template_definitions()
+        with unittest.mock.patch("src.template_registry.get_custom_skills_root", return_value=Path("output") / "empty_test_skills"):
+            definitions = list_template_definitions()
         ids = {item.id for item in definitions}
         self.assertEqual(
             ids,
             {"study-deep-dive", "minimal-summary", "action-extraction", "course-notes", "expert-review"},
         )
+
+    def test_custom_templates_are_created_and_editing_archives_old_version(self) -> None:
+        temp_dir = Path("output") / "project3_custom_templates"
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        try:
+            with unittest.mock.patch("src.template_registry.get_custom_skills_root", return_value=temp_dir / "skills"):
+                created = create_custom_template_definition("短视频改写", "改写成短视频脚本", "# 目标\n- 改写成短视频脚本")
+                self.assertEqual(created.source, "custom")
+                self.assertTrue(created.editable)
+                self.assertIn(created.id, {item.id for item in list_template_definitions()})
+
+                updated = update_custom_template_definition(
+                    created.id,
+                    name="短视频改写新版",
+                    description="改写成新版脚本",
+                    prompt_instructions="# 目标\n- 改写成新版短视频脚本",
+                )
+                self.assertNotEqual(updated.id, created.id)
+                self.assertTrue(updated.editable)
+                archived = load_template_definition(created.id)
+                self.assertTrue(archived.archived)
+                self.assertFalse(archived.editable)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_system_template_cannot_be_edited(self) -> None:
+        with self.assertRaises(ValueError):
+            update_custom_template_definition(
+                "expert-review",
+                name="专业点评新版",
+                description="不应该允许修改",
+                prompt_instructions="# no",
+            )
 
 
 class ArtifactRoundTripTests(unittest.TestCase):

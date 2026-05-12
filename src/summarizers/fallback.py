@@ -100,6 +100,8 @@ class FallbackSummarizer:
             section_summaries=sections,
             template_fields=fields,
             warning=warning,
+            template_source=template_definition.source,
+            template_version=template_definition.version,
         )
 
     def summarize(self, transcript_result: TranscriptBundle | TranscriptResult, style: str) -> StructuredSummary:

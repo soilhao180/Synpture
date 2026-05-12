@@ -313,6 +313,8 @@ JSON 格式：
                 for item in payload.get("section_summaries", [])
             ],
             template_fields=dict(payload.get("template_fields", {})),
+            template_source=template_definition.source,
+            template_version=template_definition.version,
         )
 
     def summarize(self, transcript_result: TranscriptBundle | TranscriptResult, style: str) -> StructuredSummary:

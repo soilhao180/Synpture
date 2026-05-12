@@ -171,6 +171,8 @@ class TemplateResult:
     section_summaries: list[TemplateSection]
     template_fields: dict[str, Any] = field(default_factory=dict)
     warning: str | None = None
+    template_source: str = "system"
+    template_version: str | None = None
 
 
 @dataclass
@@ -183,6 +185,10 @@ class TemplateDefinition:
     prompt_instructions: str
     fallback_rules: dict[str, Any] = field(default_factory=dict)
     directory: Path | None = None
+    source: str = "system"
+    version: str | None = None
+    editable: bool = False
+    archived: bool = False
 
 
 @dataclass

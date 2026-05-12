@@ -143,7 +143,10 @@ class RuntimePathsTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        with patch("src.template_registry.TEMPLATE_ROOT", app_root / "templates" / "skills"):
+        with (
+            patch("src.template_registry.TEMPLATE_ROOT", app_root / "templates" / "skills"),
+            patch("src.template_registry.get_custom_skills_root", return_value=self.temp_dir / "empty_skills"),
+        ):
             definitions = list_template_definitions()
 
         self.assertEqual(len(definitions), 1)

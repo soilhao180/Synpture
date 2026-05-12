@@ -39,6 +39,7 @@ from src.runtime_resources import (
     start_runtime_resource_download,
 )
 from src.services.summary_service import SummaryService
+from src.template_registry import create_custom_template_definition, update_custom_template_definition
 from src.share_link_ingest import (
     get_managed_auth_user_data_dir,
     inspect_managed_auth_profile,
@@ -77,6 +78,12 @@ class PastedTextTaskRequest(BaseModel):
 class ResumeTemplatesRequest(BaseModel):
     templateId: str | None = None
     summaryModel: str | None = None
+
+
+class CustomTemplateRequest(BaseModel):
+    name: str
+    description: str
+    promptInstructions: str
 
 
 class SettingsSaveRequest(BaseModel):
@@ -157,6 +164,29 @@ class WorkspaceBackend:
             "resumeCandidate": self.find_resume_candidate(),
             "templates": serialize_template_catalog(self.summary_service.list_runtime_templates()),
         }
+
+    def create_custom_template_payload(self, payload: CustomTemplateRequest) -> dict[str, Any]:
+        try:
+            definition = create_custom_template_definition(
+                payload.name,
+                payload.description,
+                payload.promptInstructions,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return serialize_template_catalog([definition])[0]
+
+    def update_custom_template_payload(self, template_id: str, payload: CustomTemplateRequest) -> dict[str, Any]:
+        try:
+            definition = update_custom_template_definition(
+                template_id,
+                name=payload.name,
+                description=payload.description,
+                prompt_instructions=payload.promptInstructions,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return serialize_template_catalog([definition])[0]
 
     def get_settings_payload(self) -> dict[str, Any]:
         return serialize_settings(self.settings)
@@ -627,6 +657,14 @@ def create_web_app(
     def download_artifact(run_id: str, artifact_name: str):
         path = backend.get_download_file(run_id, artifact_name)
         return FileResponse(path, filename=path.name)
+
+    @app.post("/api/templates/custom")
+    def post_custom_template(payload: CustomTemplateRequest) -> dict[str, Any]:
+        return backend.create_custom_template_payload(payload)
+
+    @app.put("/api/templates/custom/{template_id}")
+    def put_custom_template(template_id: str, payload: CustomTemplateRequest) -> dict[str, Any]:
+        return backend.update_custom_template_payload(template_id, payload)
 
     @app.post("/api/tasks/share-link")
     def post_share_link_task(payload: ShareLinkTaskRequest) -> dict[str, Any]:

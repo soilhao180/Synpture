@@ -80,6 +80,15 @@ def get_managed_auth_root() -> Path:
     return get_user_data_root() / "managed_auth_profiles" if is_packaged() else get_app_root() / "output" / "managed_auth_profiles"
 
 
+def get_custom_skills_root() -> Path:
+    override = os.getenv("SYNPTURE_SKILLS_DIR")
+    if override:
+        return Path(override).resolve()
+    appdata = os.getenv("APPDATA")
+    base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+    return (base / APP_NAME / "skills").resolve()
+
+
 def runtime_resource_path(*parts: str) -> Path:
     user_candidate = get_user_data_root().joinpath(*parts)
     bundle_candidate = bundled_path(*parts)
