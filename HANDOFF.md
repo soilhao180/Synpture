@@ -1,27 +1,41 @@
 # Synpture 交接文档
 
-## 当前工作目录
+## 当前交接状态
 
-`C:\Users\59283\Desktop\MP4`
+当前无进行中交接；请以 `README.md` + `PROJECT_MAP.md` 为准。
 
-## 当前主架构与硬边界
+`README.md` 负责源码版/安装版如何运行、配置、恢复资源和打包。  
+`PROJECT_MAP.md` 负责稳定代码地图、模块入口、开发规范、测试命令和硬边界。
 
-- 主工作台已经切到 `FastAPI + workspace-ui`。
-- 默认开发启动方式必须保持：
+## 下一次大版本交接模板
 
-```powershell
-python app.py
+大版本分支合并并跑通后，在本节下方新增一段；不要把流水账写入 `PROJECT_MAP.md`。
+
+```markdown
+## YYYY-MM-DD：<版本/分支/主题>
+
+### 合并状态
+- 分支：
+- 合并到：
+- 验证结果：
+- 安装包/资源包：
+
+### 本轮主要变化
+- 
+
+### 关键文件
+- 
+
+### 风险和硬边界
+- 
+
+### 下一步建议
+- 
 ```
 
-- 不要回退旧 Streamlit。
-- 不要新增第二套前端栈。
-- 不要破坏默认首页、顶部工具顺序、`1200px` 主热区、左右抽屉语义。
-- 不要伪造授权状态。
-- 不要破坏 `.env` 写回规则。
-- 不要破坏恢复项目和 `output/` 目录语义。
-- 不要把 GPU 转录链路偷偷改成 CPU-only；CPU 只能显式兜底。
+## 历史阶段记录
 
-## 当前问题背景
+### 2026-05-12：开发运行时资源与 env 写回修复
 
 最近主要修了三类问题：
 
@@ -29,7 +43,7 @@ python app.py
 2. 前端保存 API key 后 `.env` 被写坏，出现裸露的多行 `sk-...`。
 3. 本地 `python app.py` 按 `Ctrl+C` 退出时 PowerShell 打出 `CancelledError / KeyboardInterrupt` traceback，看起来像崩溃。
 
-## 当前已修改文件
+#### 当前已修改文件
 
 这些改动是有意的，已经用于修复上述问题：
 
@@ -42,9 +56,9 @@ python app.py
 - `tests/test_runtime_resources.py`
 - `HANDOFF.md`
 
-## 修复 1：本地 `python app.py` 点转录没反应
+#### 修复 1：本地 `python app.py` 点转录没反应
 
-### 根因
+##### 根因
 
 Lite 资源系统新增后，前端提交转录前会检查：
 
@@ -69,7 +83,7 @@ Lite 资源系统新增后，前端提交转录前会检查：
 
 所以本地资源被误判为 missing，前端按钮在提交前被资源门禁拦住，看起来像“点了没反应”。
 
-### 已改内容
+##### 已改内容
 
 文件：`src/runtime_resources.py`
 
@@ -83,7 +97,7 @@ Lite 资源系统新增后，前端提交转录前会检查：
 - 新增测试覆盖开发模式源码资源 ready。
 - 新增测试覆盖 packaged 模式不使用开发 fallback。
 
-### 当前本地资源状态
+##### 当前本地资源状态
 
 已验证当前本地开发模式下：
 
@@ -91,9 +105,9 @@ Lite 资源系统新增后，前端提交转录前会检查：
 - `browser_runtime`: ready
 - `transcription_runtime`: ready
 
-## 修复 2：前端保存 API key 写坏 `.env`
+#### 修复 2：前端保存 API key 写坏 `.env`
 
-### 根因
+##### 根因
 
 `src/presentation/config_io.py` 原来的正则是：
 
@@ -103,22 +117,9 @@ r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*=\s*)(.*?)(\r?\n)?$"
 
 其中 `\s*=\s*` 会吃掉换行。
 
-当 `.env` 中存在：
+当 `.env` 中存在空的 API key 配置行，再保存密钥时，可能写成多行，导致 `.env` 中出现裸露的 orphan secret 行。
 
-```env
-SUMMARY_API_KEY=
-```
-
-再保存 `sk-xxx` 时，可能写成：
-
-```env
-SUMMARY_API_KEY=
-sk-xxx
-```
-
-这就是 `.env` 里出现多行裸 key 的原因。
-
-### 已改内容
+##### 已改内容
 
 文件：`src/presentation/config_io.py`
 
@@ -147,17 +148,11 @@ r"^([^\S\r\n]*)([A-Za-z_][A-Za-z0-9_]*)([^\S\r\n]*=[^\S\r\n]*)([^\r\n]*)(\r?\n)?
 - 新增测试：清理 orphan API key 行。
 - 新增测试：拒绝多行 API key。
 
-### 当前 `.env` 状态
+##### 当前 `.env` 状态
 
-用户本地 `.env` 已清理，当前 API key 是空的：
+用户本地 `.env` 已清理。不要在文档或提交里写入真实 API key。用户可以重新在前端系统设置里保存 API key。
 
-```env
-SUMMARY_API_KEY=
-```
-
-不要在文档或提交里写入真实 API key。用户可以重新在前端系统设置里保存 API key。
-
-### 建议验证流程
+##### 建议验证流程
 
 ```powershell
 python app.py
@@ -168,11 +163,7 @@ python app.py
 1. 系统设置里重新粘贴 API key。
 2. 点保存。
 3. 点测试连接 / 获取模型 / 测试模型。
-4. 检查 `.env` 是否只写成一行：
-
-```env
-SUMMARY_API_KEY=sk-xxx
-```
+4. 检查 `.env` 是否只写成一行 API key 配置，不出现裸露 orphan secret 行。
 
 如果还复发，优先检查：
 
@@ -180,9 +171,9 @@ SUMMARY_API_KEY=sk-xxx
 - `workspace-ui/src/app.js` 的 `normalizeSettingInput()` 是否生效。
 - 保存接口收到的 payload 是否含换行。
 
-## 修复 3：`Ctrl+C` 退出时 traceback
+#### 修复 3：`Ctrl+C` 退出时 traceback
 
-### 现象
+##### 现象
 
 用户截图中前面已经正常显示：
 
@@ -196,11 +187,11 @@ Finished server process
 - `asyncio.exceptions.CancelledError`
 - `KeyboardInterrupt`
 
-### 判断
+##### 判断
 
 这是 Windows PowerShell 下 `Ctrl+C` 结束 `uvicorn.Server.run()` 时的正常取消信号，被 Python runner 打成 traceback，不是业务崩溃。
 
-### 已改内容
+##### 已改内容
 
 文件：`app.py`
 
@@ -221,12 +212,11 @@ except (KeyboardInterrupt, asyncio.CancelledError):
 
 目标：`python app.py` 按 `Ctrl+C` 后不再喷正常退出 traceback。
 
-## Lite 安装包与资源系统背景
+#### Lite 安装包与资源系统背景
 
 之前已经做过 Lite 安装包方向：
 
-- 默认安装包输出目录：
-  `C:\Users\59283\Desktop\MP4\Synpture`
+- 默认安装包输出目录：`Synpture/`
 - Lite 包思路：
   - 安装器不内置模型、浏览器 runtime、转录 runtime。
   - 首次使用从 GitHub Releases 下载。
@@ -269,7 +259,7 @@ SHA256：
 - `packaging/runtime_resources.json` 在终端里可能显示乱码，但 JSON 可读。
 - 不要随便改下载 URL 或 SHA，除非明确要重打资源包。
 
-## Git 背景
+#### Git 背景
 
 当前仓库远端：
 
@@ -291,7 +281,7 @@ git remote -v
 git branch --show-current
 ```
 
-## 必跑命令
+#### 必跑命令
 
 每次改完至少跑：
 
@@ -307,7 +297,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 Ran 105 tests ... OK
 ```
 
-## 用户偏好与协作方式
+#### 用户偏好与协作方式
 
 - 用户希望直接、实用，不要绕。
 - 用户很关注“是不是又凭感觉改”。
@@ -321,7 +311,7 @@ Ran 105 tests ... OK
   - 哪些不能假状态。
 - 避免大而泛的回答，优先给能执行的命令和文件路径。
 
-## 下一步建议
+#### 下一步建议
 
 1. 先确认用户是否要验证本地启动：
 

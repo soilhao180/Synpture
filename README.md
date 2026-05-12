@@ -2,6 +2,11 @@
 
 Synpture 是一个本地 Windows 工作台，用来把分享链接、本地音视频和文本文件整理成原稿、第一稿以及基于模板的深化结果。
 
+如果你是来接手开发，而不是只使用这个工具：
+
+- 先看 `PROJECT_MAP.md`：稳定代码地图、模块入口、开发规范、测试命令和硬边界。
+- 再看 `HANDOFF.md`：大版本或大分支合并后的阶段性交接和历史动向。
+
 当前主应用路径是：
 
 - 后端：`FastAPI`
@@ -258,55 +263,16 @@ packaging/runtime_resources.json
 
 注意：`runtime_resources.json` 里 SHA256 为空时，下载会被后端安全阻断。这是故意的，避免没有校验就下载运行二进制。
 
-## 当前架构
+## 开发接手
 
-重要后端文件：
-
-- `app.py`
-- `synpture_launcher.py`
-- `src/presentation/web_app.py`
-- `src/presentation/api_serializers.py`
-- `src/presentation/task_registry.py`
-- `src/runtime_paths.py`
-- `src/runtime_resources.py`
-- `src/diagnostics.py`
-- `src/transcription_runtime.py`
-- `src/application/pipeline_orchestrator.py`
-- `src/infrastructure/artifact_store.py`
-
-重要前端文件：
-
-- `workspace-ui/index.html`
-- `workspace-ui/src/app.js`
-- `workspace-ui/src/styles.css`
-- `workspace-ui/vendor/`
-- `workspace-ui/SourceHanSansCN-VF-2.otf`
-
-重要打包和恢复文件：
-
-- `scripts/bootstrap_dev.ps1`
-- `scripts/restore_runtime.ps1`
-- `scripts/prepare_windows_runtime.ps1`
-- `scripts/package_runtime_assets.ps1`
-- `scripts/build_windows_installer.ps1`
-- `packaging/runtime_resources.json`
-- `packaging/synpture_launcher.spec`
-- `packaging/SynptureInstaller.iss`
-
-模板目录：
+源码结构、模块职责、开发入口、测试矩阵、前端设计规范和硬边界统一维护在：
 
 ```text
-templates/skills/
+PROJECT_MAP.md
 ```
 
-## 不能随便动的边界
+阶段性交接、版本分支合并后的历史动向和下一步状态统一维护在：
 
-- 不要把主工作台改回旧 Streamlit。
-- 不要新增第二套前端栈。
-- 保持 `python app.py` 可用。
-- 保持 `FastAPI + workspace-ui` 主路径。
-- 保持默认工具顺序：分享链接、本地媒体、文本输入、恢复项目。
-- 不要把 `.env`、模型、用户 output、安装器产物、恢复出来的 `third_party` 大资源提交到 Git。
-- CPU 转录兜底必须显式确认，不允许 GPU 失败后静默退到 CPU。
-- 授权状态必须是真实检查结果，不允许伪造可用状态。
-
+```text
+HANDOFF.md
+```
